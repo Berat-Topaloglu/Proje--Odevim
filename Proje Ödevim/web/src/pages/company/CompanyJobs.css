@@ -1,0 +1,72 @@
+.company-jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.job-manage-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.job-manage-info {
+    flex: 1;
+}
+
+.job-manage-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.job-manage-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.job-manage-meta span {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.icon-box-primary {
+    width: 48px;
+    height: 48px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.job-manage-badges {
+    display: flex;
+    gap: 8px;
+}
+
+.job-manage-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+    .job-manage-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .job-manage-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

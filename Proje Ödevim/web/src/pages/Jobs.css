@@ -1,0 +1,140 @@
+.jobs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.jobs-title {
+    font-size: 28px;
+    font-weight: 800;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.jobs-subtitle {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.jobs-filters {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-input {
+    font-size: 16px !important;
+}
+
+.filter-row {
+    display: flex;
+    gap: 12px;
+}
+
+.filter-row .form-select {
+    flex: 1;
+}
+
+.jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.job-card {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    text-decoration: none;
+    color: inherit;
+    padding: 20px 24px;
+}
+
+.job-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.job-card-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.job-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.job-company {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.job-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.job-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.job-card-right {
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.job-date {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* Loading skeleton */
+.jobs-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.job-card-skeleton {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* Empty State */
+.jobs-empty {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--text-muted);
+}
+
+.empty-icon {
+    font-size: 60px;
+    margin-bottom: 16px;
+}
+
+.jobs-empty h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
