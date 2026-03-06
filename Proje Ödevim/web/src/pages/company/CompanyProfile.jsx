@@ -8,7 +8,7 @@ import "../student/StudentProfile.css";
 import "./CompanyProfile.css";
 
 export default function CompanyProfile() {
-    const { currentUser } = useAuth();
+    const { currentUser, updateDisplayName, logout } = useAuth();
     const [profile, setProfile] = useState({
         companyName: "", sector: "", website: "", description: "", logoUrl: "",
         verified: false, employeeCount: "", foundationYear: "", location: "",
@@ -20,7 +20,11 @@ export default function CompanyProfile() {
     const [saving, setSaving] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [success, setSuccess] = useState("");
+    const [error, setError] = useState("");
     const [reviews, setReviews] = useState([]);
+    
+    // Auth error modal
+    const [authErrorModal, setAuthErrorModal] = useState(false);
 
     // Password state
     const [newPassword, setNewPassword] = useState("");
@@ -70,8 +74,6 @@ export default function CompanyProfile() {
         return () => stopCamera();
     }, [currentUser]);
 
-    const { updateDisplayName } = useAuth();
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -101,9 +103,10 @@ export default function CompanyProfile() {
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
             if (err.code === "auth/requires-recent-login") {
-                alert("Güvenlik nedeniyle şifre belirlemek için sayfadan çıkıp yeniden giriş yapmanız gerekiyor.");
+                setAuthErrorModal(true);
             } else {
-                alert("Şifre belirlenirken bir hata oluştu: " + err.message);
+                setError("Şifre belirlenirken bir hata oluştu.");
+                setTimeout(() => setError(""), 3000);
             }
         }
         setSettingPassword(false);
@@ -122,7 +125,11 @@ export default function CompanyProfile() {
             setShowPhotoModal(false);
             setPreviewPhoto(null);
             setTimeout(() => setSuccess(""), 3000);
-        } catch (err) { console.error("Logo hatası:", err); }
+        } catch (err) { 
+            console.error("Logo hatası:", err);
+            setError("Logo yüklenirken bir hata oluştu.");
+            setTimeout(() => setError(""), 3000);
+        }
         setUploadingLogo(false);
     };
 
@@ -133,8 +140,10 @@ export default function CompanyProfile() {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
             if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (err) {
-            alert("Kameraya erişilemedi!");
+            console.error("Kamera açılamadı:", err);
+            setError("Kameraya erişilemedi!");
             setIsCameraActive(false);
+            setTimeout(() => setError(""), 3000);
         }
     };
 
@@ -182,6 +191,7 @@ export default function CompanyProfile() {
         <div className="page-wrapper">
             <div className="content-wrapper page-enter" style={{ maxWidth: 850 }}>
                 {success && <div className="alert alert-success mb-16">{success}</div>}
+                {error && <div className="alert alert-error mb-16">{error}</div>}
 
                 {/* Header Card */}
                 <div className="profile-header card corporate-section-card">
@@ -395,6 +405,23 @@ export default function CompanyProfile() {
                             >
                                 {settingPassword ? "Kaydediliyor..." : "Şifreyi Kaydet"}
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Auth Error Modal */}
+                {authErrorModal && (
+                    <div className="modal-overlay" onClick={() => setAuthErrorModal(false)}>
+                        <div className="modal-content card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: "center", padding: "32px 24px" }}>
+                            <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+                            <h3 style={{ marginBottom: 12, color: "var(--warning)" }}>Oturum Süresi Doldu</h3>
+                            <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 15, lineHeight: 1.5 }}>
+                                Güvenliğiniz için şifre belirlemeden önce kimliğinizi tekrar doğrulamamız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.
+                            </p>
+                            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                                <button className="btn btn-secondary" onClick={() => setAuthErrorModal(false)}>İptal</button>
+                                <button className="btn btn-primary" onClick={() => { logout(); window.location.href = '/login'; }}>Yeniden Giriş Yap</button>
+                            </div>
                         </div>
                     </div>
                 )}

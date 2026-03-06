@@ -9,7 +9,7 @@ import "./StudentProfile.css";
 const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "Figma", "SQL", "Git", "TypeScript", "Vue.js", "C#", "C++", "PHP", "Swift", "Kotlin", "Flutter", "Django", "MongoDB", "PostgreSQL", "MySQL", "AWS", "Docker", "Machine Learning"];
 
 export default function StudentProfile() {
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, updateDisplayName, logout } = useAuth();
     const [profile, setProfile] = useState({
         university: "", department: "", gpa: "", bio: "", skills: [], cvUrl: "",
         displayName: currentUser?.displayName || ""
@@ -20,8 +20,12 @@ export default function StudentProfile() {
     const [uploadingCV, setUploadingCV] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const [success, setSuccess] = useState("");
+    const [error, setError] = useState("");
     const [skillInput, setSkillInput] = useState("");
     const [reviews, setReviews] = useState([]);
+    
+    // Auth error modal
+    const [authErrorModal, setAuthErrorModal] = useState(false);
 
     // Password state
     const [newPassword, setNewPassword] = useState("");
@@ -77,8 +81,6 @@ export default function StudentProfile() {
         };
     }, [currentUser]);
 
-    const { updateDisplayName } = useAuth();
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -109,9 +111,10 @@ export default function StudentProfile() {
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
             if (err.code === "auth/requires-recent-login") {
-                alert("Güvenlik nedeniyle şifre belirlemek için sayfadan çıkıp yeniden giriş yapmanız gerekiyor.");
+                setAuthErrorModal(true);
             } else {
-                alert("Şifre belirlenirken bir hata oluştu: " + err.message);
+                setError("Şifre belirlenirken bir hata oluştu.");
+                setTimeout(() => setError(""), 3000);
             }
         }
         setSettingPassword(false);
@@ -135,7 +138,8 @@ export default function StudentProfile() {
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
             console.error("Fotoğraf yüklenemedi:", err);
-            alert("Fotoğraf yüklenirken bir hata oluştu.");
+            setError("Fotoğraf yüklenirken bir hata oluştu.");
+            setTimeout(() => setError(""), 3000);
         }
         setUploadingPhoto(false);
     };
@@ -153,8 +157,9 @@ export default function StudentProfile() {
             }
         } catch (err) {
             console.error("Kamera açılamadı:", err);
-            alert("Kameraya erişilemedi. Lütfen izinleri kontrol edin.");
+            setError("Kameraya erişilemedi. Lütfen izinleri kontrol edin.");
             setIsCameraActive(false);
+            setTimeout(() => setError(""), 3000);
         }
     };
 
@@ -213,7 +218,8 @@ export default function StudentProfile() {
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
             console.error("CV yüklenemedi:", err);
-            alert("Dosya yüklenirken bir hata oluştu.");
+            setError("Dosya yüklenirken bir hata oluştu.");
+            setTimeout(() => setError(""), 3000);
         }
         setUploadingCV(false);
     };
@@ -582,6 +588,23 @@ export default function StudentProfile() {
                             >
                                 {settingPassword ? "Kaydediliyor..." : "Şifreyi Kaydet"}
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Auth Error Modal */}
+                {authErrorModal && (
+                    <div className="modal-overlay" onClick={() => setAuthErrorModal(false)}>
+                        <div className="modal-content card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: "center", padding: "32px 24px" }}>
+                            <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+                            <h3 style={{ marginBottom: 12, color: "var(--warning)" }}>Oturum Süresi Doldu</h3>
+                            <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 15, lineHeight: 1.5 }}>
+                                Güvenliğiniz için şifre belirlemeden önce kimliğinizi tekrar doğrulamamız gerekiyor. Lütfen çıkış yapıp tekrar giriş yapın.
+                            </p>
+                            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                                <button className="btn btn-secondary" onClick={() => setAuthErrorModal(false)}>İptal</button>
+                                <button className="btn btn-primary" onClick={() => { logout(); window.location.href = '/login'; }}>Yeniden Giriş Yap</button>
+                            </div>
                         </div>
                     </div>
                 )}
