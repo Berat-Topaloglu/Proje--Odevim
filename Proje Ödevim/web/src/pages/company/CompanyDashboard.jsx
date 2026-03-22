@@ -188,7 +188,9 @@ export default function CompanyDashboard() {
                             </div>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                {applications.slice(0, 4).map(app => (
+                                {applications
+                                    .slice(0, 4)
+                                    .map(app => (
                                     <div key={app.id} className="app-item">
                                         <div className="app-info">
                                             <p className="app-title">{app.studentName}</p>
@@ -199,6 +201,11 @@ export default function CompanyDashboard() {
                                         </span>
                                     </div>
                                 ))}
+                                {applications.filter(a => a.status === "pending").length === 0 && (
+                                    <p className="text-center p-8 text-xs animate-pulse" style={{ color: "var(--success)", background: "rgba(74, 222, 128, 0.05)", borderRadius: 8, marginTop: 8 }}>
+                                        ✨ Bekleyen başvuru yok
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>

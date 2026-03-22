@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform } from "reac
 import { Text, TextInput, IconButton, Avatar, Surface, ActivityIndicator } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/context/AuthContext";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, limit } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 
 export default function ChatDetailScreen() {

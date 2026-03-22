@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
+import Notification from "./components/shared/Notification";
 import Navbar from "./components/layout/Navbar";
 
 // Auth Pages
@@ -25,15 +27,22 @@ import CompanyProfile from "./pages/company/CompanyProfile";
 import PostJob from "./pages/company/PostJob";
 import CompanyJobs from "./pages/company/CompanyJobs";
 import Applicants from "./pages/company/Applicants";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 
 // Private Route Component
 function PrivateRoute({ children, type }) {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isAdmin } = useAuth();
 
   if (!currentUser) return <Navigate to="/login" />;
 
-  if (type && userProfile && userProfile?.type !== type) {
+  // Admin access check for specifically admin-only routes
+  if (type === "admin" && !isAdmin) {
+    return <Navigate to="/" />;
+  }
+
+  // Role based redirection (for dual-role users)
+  if (type && type !== "admin" && userProfile && userProfile?.type !== type) {
     return <Navigate to={userProfile?.type === "student" ? "/student/dashboard" : "/company/dashboard"} />;
   }
 
@@ -50,7 +59,29 @@ function MainLayout({ children }) {
 }
 
 function AppContent() {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isAdmin, systemSettings } = useAuth();
+
+  if (systemSettings?.maintenance && !isAdmin) {
+    return (
+      <div className="page-wrapper min-h-screen flex items-center justify-center text-center p-4 bg-primary sm:p-8">
+        <div className="card glass w-full max-w-md p-6 border-primary animate-pulse flex flex-col items-center sm:p-10">
+          <div className="mb-4" style={{ width: 100, height: 100 }}>
+            <img src="/stajhub-icon.svg" alt="logo" className="w-full h-full drop-shadow-[0_0_15px_rgba(var(--primary-rgb),0.5)]" />
+          </div>
+          <h2 className="text-3xl font-black tracking-tighter mb-8 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            StajHub
+          </h2>
+          <h1 className="text-4xl font-bold mb-4 flex items-center gap-2">
+            <span role="img" aria-label="lock">🔒</span> Sistem Bakımda
+          </h1>
+          <p className="text-secondary mb-8 text-lg font-medium opacity-80">
+            Sistem Kurucu tarafından bakıma alındı. <br /> Lütfen daha sonra tekrar deneyin.
+          </p>
+          <div className="loading-spinner"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Router>
@@ -78,6 +109,11 @@ function AppContent() {
             <MainLayout><Messages /></MainLayout>
           </PrivateRoute>
         } />
+        <Route path="/messages/:chatId" element={
+          <PrivateRoute>
+            <MainLayout><Messages /></MainLayout>
+          </PrivateRoute>
+        } />
         <Route path="/notifications" element={
           <PrivateRoute>
             <MainLayout><Notifications /></MainLayout>
@@ -92,6 +128,11 @@ function AppContent() {
         } />
         <Route path="/student/profile" element={
           <PrivateRoute type="student">
+            <MainLayout><StudentProfile /></MainLayout>
+          </PrivateRoute>
+        } />
+        <Route path="/student/profile/:id" element={
+          <PrivateRoute>
             <MainLayout><StudentProfile /></MainLayout>
           </PrivateRoute>
         } />
@@ -128,6 +169,13 @@ function AppContent() {
           </PrivateRoute>
         } />
 
+        {/* Admin Routes */}
+        <Route path="/admin" element={
+          <PrivateRoute type="admin">
+            <MainLayout><AdminDashboard /></MainLayout>
+          </PrivateRoute>
+        } />
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
@@ -137,8 +185,11 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <NotificationProvider>
+      <AuthProvider>
+        <Notification />
+        <AppContent />
+      </AuthProvider>
+    </NotificationProvider>
   );
 }

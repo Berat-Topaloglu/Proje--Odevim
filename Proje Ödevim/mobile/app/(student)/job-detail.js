@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Modal } from "react-native";
+import { View, StyleSheet, ScrollView, Modal, Alert } from "react-native";
 import { Text, Surface, Button, IconButton, Avatar, List, TextInput, ActivityIndicator, Divider } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, getDocs } from "firebase/firestore";
@@ -111,7 +111,9 @@ export default function JobDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <ScrollView>
+            <ScrollView 
+                contentContainerStyle={{ paddingBottom: 120 }}
+            >
                 <Surface style={styles.header} elevation={2}>
                     <IconButton
                         icon="arrow-left"
@@ -171,15 +173,23 @@ export default function JobDetailScreen() {
                         </>
                     )}
                 </View>
-                <View style={{ height: 100 }} />
             </ScrollView>
 
-            {userProfile?.type === "student" && (
+            {(!currentUser || userProfile?.type === "student") && (
                 <Surface style={styles.footer} elevation={4}>
                     <View style={{ flexDirection: "row", gap: 10 }}>
                         <Button
                             mode="outlined"
-                            onPress={handleStartChat}
+                            onPress={() => {
+                                if (!currentUser) {
+                                    Alert.alert("Giriş Gerekli", "Şirketle iletişime geçmek için giriş yapmalısın.", [
+                                        { text: "Vazgeç", style: "cancel" },
+                                        { text: "Giriş Yap", onPress: () => router.push("/(auth)/login") }
+                                    ]);
+                                } else {
+                                    handleStartChat();
+                                }
+                            }}
                             style={[styles.applyButton, { flex: 1, backgroundColor: "transparent" }]}
                             contentStyle={{ height: 50 }}
                             textColor="#6366f1"
@@ -188,7 +198,16 @@ export default function JobDetailScreen() {
                         </Button>
                         <Button
                             mode="contained"
-                            onPress={() => setModalVisible(true)}
+                            onPress={() => {
+                                if (!currentUser) {
+                                    Alert.alert("Giriş Gerekli", "İlana başvurmak için giriş yapmalısın.", [
+                                        { text: "Vazgeç", style: "cancel" },
+                                        { text: "Giriş Yap", onPress: () => router.push("/(auth)/login") }
+                                    ]);
+                                } else {
+                                    setModalVisible(true);
+                                }
+                            }}
                             style={[styles.applyButton, { flex: 1.5 }]}
                             contentStyle={{ height: 50 }}
                         >

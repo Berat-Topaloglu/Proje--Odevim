@@ -12,8 +12,11 @@ import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import "./Jobs.css";
 
-const SECTORS = ["Tüm Sektörler", "Yazılım", "Finans", "Sağlık", "Tasarım", "Pazarlama", "Eğitim", "Mühendislik", "Diğer"];
+const SECTORS = ["Tüm Sektörler", "Yazılım", "Finans", "Sağlık", "Tasarım", "Pazarlama", "Eğitim", "Mühendislik", "Hukuk", "Muhasebe", "Lojistik", "Diğer"];
 const TYPES = ["Tüm Türler", "remote", "hybrid", "onsite"];
+const EXPERIENCE_LEVELS = ["Tüm Seviyeler", "Stajyer", "Yeni Mezun (0-2 Yıl)", "Deneyimli (3-5 Yıl)", "Uzman (5+ Yıl)"];
+const EMPLOYMENT_TYPES = ["Tüm Şekiller", "Stajyer", "Tam Zamanlı", "Yarı Zamanlı", "Proje Bazlı"];
+const EDUCATION_LEVELS = ["Tüm Eğitimler", "Lise", "Ön Lisans", "Lisans Devam", "Lisans Mezun", "Yüksek Lisans"];
 const TYPE_LABELS = { remote: "Uzaktan", hybrid: "Hibrit", onsite: "Ofis" };
 
 export default function Jobs() {
@@ -22,6 +25,9 @@ export default function Jobs() {
     const [search, setSearch] = useState("");
     const [sector, setSector] = useState("Tüm Sektörler");
     const [type, setType] = useState("Tüm Türler");
+    const [expLevel, setExpLevel] = useState("Tüm Seviyeler");
+    const [empType, setEmpType] = useState("Tüm Şekiller");
+    const [eduLevel, setEduLevel] = useState("Tüm Eğitimler");
     const { userProfile } = useAuth();
 
     useEffect(() => {
@@ -31,7 +37,6 @@ export default function Jobs() {
         try {
             const q = query(
                 collection(db, "jobs"),
-                where("status", "==", "active"),
                 limit(100)
             );
 
@@ -72,7 +77,11 @@ export default function Jobs() {
             job.location?.toLowerCase().includes(search.toLowerCase());
         const matchSector = sector === "Tüm Sektörler" || job.sector === sector;
         const matchType = type === "Tüm Türler" || job.type === type;
-        return matchSearch && matchSector && matchType;
+        const matchExp = expLevel === "Tüm Seviyeler" || job.experienceLevel === expLevel;
+        const matchEmp = empType === "Tüm Şekiller" || job.employmentType === empType;
+        const matchEdu = eduLevel === "Tüm Eğitimler" || job.minEducation === eduLevel;
+        const isNotDeleted = job.status !== "deleted";
+        return matchSearch && matchSector && matchType && matchExp && matchEmp && matchEdu && isNotDeleted;
     });
 
     return (
@@ -119,6 +128,27 @@ export default function Jobs() {
                                     {TYPE_LABELS[t] || t}
                                 </option>
                             ))}
+                        </select>
+                        <select
+                            className="form-select"
+                            value={expLevel}
+                            onChange={(e) => setExpLevel(e.target.value)}
+                        >
+                            {EXPERIENCE_LEVELS.map((e) => <option key={e}>{e}</option>)}
+                        </select>
+                        <select
+                            className="form-select"
+                            value={empType}
+                            onChange={(e) => setEmpType(e.target.value)}
+                        >
+                            {EMPLOYMENT_TYPES.map((e) => <option key={e}>{e}</option>)}
+                        </select>
+                        <select
+                            className="form-select"
+                            value={eduLevel}
+                            onChange={(e) => setEduLevel(e.target.value)}
+                        >
+                            {EDUCATION_LEVELS.map((e) => <option key={e}>{e}</option>)}
                         </select>
                     </div>
                 </div>
@@ -188,11 +218,13 @@ function JobCard({ job }) {
                     </span>
                 </div>
                 <p className="job-company">{job.companyName}</p>
-                <p className="job-meta">
-                    📍 {job.location || "Belirtilmedi"}
-                    {job.sector && <> &nbsp;·&nbsp; 🏷️ {job.sector}</>}
-                    {job.salary && <> &nbsp;·&nbsp; 💰 {job.salary}</>}
-                </p>
+                <div className="job-card-meta-line">
+                    <span className="job-meta-item">📍 {job.location || "Belirtilmedi"}</span>
+                    {job.sector && <span className="job-meta-item">🏷️ {job.sector}</span>}
+                    {job.department && <span className="job-meta-item">🛡️ {job.department}</span>}
+                    {job.experienceLevel && <span className="job-meta-item">⚡ {job.experienceLevel}</span>}
+                    {job.salary && <span className="job-meta-item" style={{ color: 'var(--success-light)' }}>💰 {job.salary}</span>}
+                </div>
                 <div className="job-skills">
                     {(job.skills || []).slice(0, 4).map((s) => (
                         <span key={s} className="badge badge-primary">{s}</span>

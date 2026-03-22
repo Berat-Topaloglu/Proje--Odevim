@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Search, LayoutDashboard, Send, Briefcase, PlusCircle, MessageSquare, User, Bell, LogOut, Menu, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, LayoutDashboard, Send, Briefcase, PlusCircle, MessageSquare, User, Bell, LogOut, Menu, X, ChevronDown, ChevronUp, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { collection, query, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { db } from "../../firebase/config";
@@ -70,7 +70,9 @@ export default function Navbar() {
             <div className="navbar-inner">
                 {/* Logo */}
                 <Link to="/" className="navbar-logo">
-                    <div className="logo-icon">S</div>
+                    <div className="logo-icon">
+                        <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
+                    </div>
                     <span className="logo-text">Staj<span>Hub</span></span>
                 </Link>
 
@@ -86,7 +88,7 @@ export default function Navbar() {
                                     <LayoutDashboard size={18} /> Dashboard
                                 </Link>
                                 <Link to="/student/applications" className={`nav-link ${isActive("/student/applications") ? "active" : ""}`}>
-                                    <Send size={18} /> Başvurularım
+                                    <ClipboardCheck size={18} /> Başvurularım
                                 </Link>
                             </>
                         ) : (
@@ -137,6 +139,11 @@ export default function Navbar() {
                                         <Bell size={16} /> Bildirimler 
                                         {unreadCount > 0 && <span className="badge-unread-nav">{unreadCount}</span>}
                                     </Link>
+                                    {userProfile?.isAdmin && (
+                                        <Link to="/admin" className="dropdown-item" style={{ color: "var(--primary)" }} onClick={() => setDropdownOpen(false)}>
+                                            👑 Kurucu Paneli
+                                        </Link>
+                                    )}
                                     <div className="dropdown-divider" />
                                     <button className="dropdown-item danger" onClick={handleLogout}>
                                         <LogOut size={16} /> Çıkış Yap
@@ -167,7 +174,7 @@ export default function Navbar() {
                     {isStudent ? (
                         <>
                             <Link to="/student/dashboard" className="mobile-nav-link" onClick={() => setMenuOpen(false)}><LayoutDashboard size={18} /> Dashboard</Link>
-                            <Link to="/student/applications" className="mobile-nav-link" onClick={() => setMenuOpen(false)}><Send size={18} /> Başvurularım</Link>
+                            <Link to="/student/applications" className="mobile-nav-link" onClick={() => setMenuOpen(false)}><ClipboardCheck size={18} /> Başvurularım</Link>
                             <Link to="/student/profile" className="mobile-nav-link" onClick={() => setMenuOpen(false)}><User size={18} /> Profilim</Link>
                         </>
                     ) : (
@@ -183,6 +190,11 @@ export default function Navbar() {
                         {unreadCount > 0 && <span className="badge-unread-nav" style={{ marginLeft: 5 }}>{unreadCount}</span>}
                     </Link>
                     <Link to="/messages" className="mobile-nav-link" onClick={() => setMenuOpen(false)}><MessageSquare size={18} /> Mesajlar</Link>
+                    {userProfile?.isAdmin && (
+                        <Link to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)} style={{ color: "var(--primary)", fontWeight: "bold" }}>
+                            👑 Kurucu Paneli
+                        </Link>
+                    )}
                     <button className="mobile-nav-link danger" onClick={handleLogout}><LogOut size={18} /> Çıkış Yap</button>
                 </div>
             )}

@@ -11,6 +11,7 @@ export default function TabLayout() {
             screenOptions={{
                 tabBarActiveTintColor: "#6366f1",
                 tabBarInactiveTintColor: "#94a3b8",
+                tabBarHideOnKeyboard: true,
                 tabBarStyle: {
                     backgroundColor: "#16213e",
                     borderTopColor: "#1e2a45",
@@ -55,16 +56,20 @@ export default function TabLayout() {
                 options={{
                     title: "Mesajlar",
                     tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="chat-bubble" color={color} size={size} />
+                        <MaterialCommunityIcons name="forum" color={color} size={size} />
                     ),
                 }}
             />
             <Tabs.Screen
                 name="profile"
                 options={{
-                    title: "Profil",
+                    title: userProfile ? "Profil" : "Giriş Yap",
                     tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="account" color={color} size={size} />
+                        <MaterialCommunityIcons 
+                            name={userProfile ? "account" : "login"} 
+                            color={color} 
+                            size={size} 
+                        />
                     ),
                 }}
             />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Alert, Image } from "react-native";
+import { View, StyleSheet, ScrollView, Alert, Image, TouchableOpacity } from "react-native";
 import { Text, TextInput, Button, Surface, IconButton, ActivityIndicator, Avatar } from "react-native-paper";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";

@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { Briefcase, PlusCircle, Inbox, MapPin, Clock, Calendar, CheckCircle2, XCircle, Trash2, Users } from "lucide-react";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 import "./CompanyJobs.css";
 
 export default function CompanyJobs() {
     const { currentUser } = useAuth();
+    const { showNotification } = useNotification();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -58,18 +60,29 @@ export default function CompanyJobs() {
             setJobs(jobs.map(j => j.id === jobId ? { ...j, status: newStatus } : j));
         } catch (err) {
             console.error("Durum güncellenemedi:", err);
-            alert("Durum güncellenirken hata oluştu.");
+            showNotification("İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.", "error", "Hata");
         }
     };
 
     const deleteJob = async (jobId) => {
-        if (!window.confirm("Bu ilanı silmek istediğinizden emin misiniz?")) return;
+        const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz? İlanla birlikte TÜM başvurular da yok edilecektir.", "Kritik İşlem");
+        if (!confirmed) return;
         try {
+            // Cascade Delete: Applications
+            const q = query(collection(db, "applications"), where("jobId", "==", jobId));
+            const snap = await getDocs(q);
+            
+            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
+            await Promise.all(deletePromises);
+
+            // Delete the job
             await deleteDoc(doc(db, "jobs", jobId));
+            
             setJobs(jobs.filter(j => j.id !== jobId));
+            showNotification(`${snap.size} başvuru temizlendi ve ilan silindi.`, "success", "Başarılı");
         } catch (err) {
             console.error("İlan silinemedi:", err);
-            alert("İlan silinirken hata oluştu.");
+            showNotification("İlan imha edilirken bir hata oluştu.", "error", "Hata");
         }
     };
 

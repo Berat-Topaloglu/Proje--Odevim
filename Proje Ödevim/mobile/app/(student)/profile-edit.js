@@ -11,7 +11,7 @@ import { uploadToCloudinary } from "../../src/utils/cloudinary";
 const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "SQL", "Git", "TypeScript", "UI/UX"];
 
 export default function StudentProfileEdit() {
-    const { currentUser } = useAuth();
+    const { currentUser, updateProfileData } = useAuth();
     const [profile, setProfile] = useState({
         university: "", department: "", gpa: "", bio: "", skills: [], cvUrl: ""
     });
@@ -34,15 +34,46 @@ export default function StudentProfileEdit() {
         fetchProfile();
     }, [currentUser]);
 
+    const initials = currentUser?.displayName?.charAt(0).toUpperCase() || "U";
+    const profileImage = profile.photoUrl || currentUser?.photoURL;
+
     const handleSave = async () => {
         setSaving(true);
         try {
+            // Update both student doc and user profile in context/users collection
             await updateDoc(doc(db, "students", currentUser.uid), profile);
+            await updateProfileData(currentUser.displayName, profile.photoUrl, profile.phoneNumber || "");
+            
             Alert.alert("Başarılı", "Profiliniz güncellendi.");
             router.back();
         } catch (err) {
             console.error("Save profile error:", err);
             Alert.alert("Hata", "Profil güncellenirken bir hata oluştu.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handlePhotoUpload = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: "image/*",
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled) {
+                setSaving(true);
+                const file = result.assets[0];
+                const url = await uploadToCloudinary(file.uri, file.name, file.mimeType);
+
+                setProfile(p => ({ ...p, photoUrl: url }));
+                // Instant sync noted
+                await updateProfileData(currentUser.displayName, url, profile.phoneNumber || "");
+                Alert.alert("Başarılı", "Profil fotoğrafınız güncellendi.");
+            }
+        } catch (err) {
+            console.error("Photo Upload error:", err);
+            Alert.alert("Hata", "Fotoğraf yüklenirken bir hata oluştu.");
         } finally {
             setSaving(false);
         }
@@ -91,6 +122,22 @@ export default function StudentProfileEdit() {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
+                <Surface style={[styles.card, { alignItems: "center", marginBottom: 20 }]} elevation={1}>
+                    {profileImage ? (
+                        <Avatar.Image size={100} source={{ uri: profileImage }} />
+                    ) : (
+                        <Avatar.Text size={100} label={initials} />
+                    )}
+                    <Button 
+                        mode="text" 
+                        onPress={handlePhotoUpload}
+                        textColor="#6366f1"
+                        style={{ marginTop: 10 }}
+                    >
+                        Fotoğrafı Değiştir
+                    </Button>
+                </Surface>
+
                 <Surface style={styles.card} elevation={1}>
                     <TextInput
                         label="Üniversite"

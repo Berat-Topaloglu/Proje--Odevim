@@ -10,35 +10,35 @@ export const CLOUDINARY_CONFIG = {
  * @param {File} file - Yüklenecek dosya
  * @returns {Promise<string>} - Yüklenen dosyanın URL'si
  */
-export const uploadToCloudinary = async (file, resourceType = "auto") => {
+export const uploadToCloudinary = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", CLOUDINARY_CONFIG.uploadPreset);
     formData.append("cloud_name", CLOUDINARY_CONFIG.cloudName);
 
+    // PDF ve diğer dökümanlar için 'raw' veya 'image' yerine 'auto' kullanıyoruz
+    // Ancak Cloudinary'nin PDF'i 'image' olarak algılaması önizleme için bazen daha iyidir.
+    const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
     try {
-        // PDF'ler için 'image' resource_type kullanmak, Cloudinary'nin önizleme sunmasını sağlar.
-        // Ancak 'auto' genellikle en güvenlisidir. 
-        const response = await fetch(CLOUDINARY_CONFIG.uploadUrl.replace("/auto/", `/${resourceType}/`), {
+        const response = await fetch(CLOUDINARY_CONFIG.uploadUrl, {
             method: "POST",
             body: formData,
         });
 
         if (!response.ok) {
             const errorData = await response.json();
-            console.error("Cloudinary error details:", errorData);
             throw new Error(errorData.error?.message || "Cloudinary yükleme hatası");
         }
 
         const data = await response.json();
         let url = data.secure_url;
 
-        // PDF dosyaları için tarayıcı önizlemesini zorlamak adına URL manipülasyonu
-        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-            // Eğer URL'de uzantı yoksa ekle veya Cloudinary viewer'ı tetikle
-            if (!url.toLowerCase().endsWith(".pdf")) {
-                url = url.replace(/\/v\d+\//, "$&").replace(/upload\//, "upload/fl_attachment:false/");
-            }
+        // PDF görüntüleme sorununu çözmek için URL'ye müdahale ediyoruz:
+        // 'fl_attachment' bayrağını kaldırıp tarayıcıda açılmasını sağlıyoruz.
+        if (isPDF) {
+            // Cloudinary URL'lerinde /upload/ kısmından sonra fl_inline veya fl_attachment:false eklenebilir.
+            url = url.replace("/upload/", "/upload/fl_attachment:false/");
         }
 
         return url;

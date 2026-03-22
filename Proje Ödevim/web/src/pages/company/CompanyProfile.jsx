@@ -30,6 +30,7 @@ export default function CompanyProfile() {
     const [newPassword, setNewPassword] = useState("");
     const [settingPassword, setSettingPassword] = useState(false);
     const isGoogleSignIn = currentUser?.providerData?.some(provider => provider.providerId === 'google.com');
+    const hasPassword = currentUser?.providerData?.some(provider => provider.providerId === 'password');
 
     // Camera & Modal States
     const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -197,7 +198,7 @@ export default function CompanyProfile() {
                 <div className="profile-header card corporate-section-card">
                     <div className="profile-avatar-container">
                         <div className="avatar avatar-xl profile-avatar" onClick={() => setShowPhotoModal(true)} style={{ cursor: "pointer", borderRadius: "16px" }}>
-                            {profile.logoUrl ? <img src={profile.logoUrl} alt="Logo" className="avatar-img" /> : initials}
+                            {(profile.logoUrl || currentUser?.photoURL) ? <img src={profile.logoUrl || currentUser?.photoURL} alt="Logo" className="avatar-img" /> : initials}
                         </div>
                         <button className="photo-upload-badge" onClick={() => setShowPhotoModal(true)}>📷</button>
                     </div>
@@ -382,7 +383,7 @@ export default function CompanyProfile() {
                 )}
 
                 {/* Password Setting for Google Users */}
-                {isGoogleSignIn && !editMode && (
+                {isGoogleSignIn && !hasPassword && !editMode && (
                     <div className="card mt-24">
                         <h2 className="section-title2">🔒 Şifre Belirle</h2>
                         <p className="text-muted" style={{ marginBottom: 16 }}>Google hesabınızla giriş yaptığınız için hesabınıza standart bir şifre de tanımlayabilirsiniz. E-posta ve belirlediğiniz şifreyle normal giriş de yapabilirsiniz.</p>

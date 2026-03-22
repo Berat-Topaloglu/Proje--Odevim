@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Text, Surface, TextInput, Button, IconButton, Chip, HelperText } from "react-native-paper";
 import { useRouter } from "expo-router";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
 

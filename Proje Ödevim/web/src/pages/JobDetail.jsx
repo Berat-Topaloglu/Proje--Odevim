@@ -1,8 +1,17 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, arrayUnion, query, where, getDocs, setDoc } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, arrayUnion, query, where, getDocs, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import { 
+    Briefcase, Users, GraduationCap, Globe, Calendar, Banknote, 
+    MapPin, Gauge, ShieldCheck, Plane, MousePointer2, 
+    Smartphone, Languages, Clock, Accessibility, UserCircle2, 
+    ChevronLeft, Trash2, Send, MessageSquare,
+    FileText, Target, ClipboardList, Rocket, Flag, User
+} from "lucide-react";
 import "./JobDetail.css";
 
 // Demo verileri (Firebase olmadan çalışması için)
@@ -14,7 +23,10 @@ const DEMO_JOBS = {
 export default function JobDetail() {
     const { id } = useParams();
     const { currentUser, userProfile, isAdmin } = useAuth();
+    const { showNotification, showConfirm } = useNotification();
     const navigate = useNavigate();
+
+    const isProfileComplete = userProfile?.profileData?.university && userProfile?.profileData?.department;
     const [job, setJob] = useState(null);
     const [deleting, setDeleting] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -22,6 +34,8 @@ export default function JobDetail() {
     const [applied, setApplied] = useState(false);
     const [coverLetter, setCoverLetter] = useState("");
     const [showApplyModal, setShowApplyModal] = useState(false);
+    const [cvFile, setCvFile] = useState(null);
+    const [portfolioUrl, setPortfolioUrl] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
@@ -85,30 +99,106 @@ export default function JobDetail() {
     const handleApply = async () => {
         setApplying(true);
         setError("");
+
+        // Profanity filter for cover letter
+        const { containsForbiddenContent } = await import("../utils/wordFilter");
+        const { isForbidden } = containsForbiddenContent(coverLetter);
+
+        if (isForbidden) {
+            showNotification(
+                "Ön yazınız yasaklı kelimeler veya iletişim bilgileri içeriyor. Lütfen kurallara uygun şekilde düzenleyin.",
+                "warning",
+                "⚠️ Uyarı"
+            );
+            setApplying(false);
+            return;
+        }
+
         try {
+            const studentName = currentUser.displayName || "Öğrenci";
+            const jobTitle = job.title;
+
+            let applicationCdnUrl = "";
+            if (cvFile) {
+                applicationCdnUrl = await uploadToCloudinary(cvFile);
+            } else if (job.cvRequired) {
+                setError("Bu ilan için Özgeçmiş (CV) yüklemeniz zorunludur.");
+                setApplying(false);
+                return;
+            }
+
+            // 1. Create Application
             await addDoc(collection(db, "applications"), {
                 jobId: id,
                 studentId: currentUser.uid,
                 companyId: job.companyId,
                 coverLetter,
+                cvUrl: applicationCdnUrl,
+                portfolioUrl: portfolioUrl || "",
                 status: "pending",
                 createdAt: serverTimestamp(),
-                jobTitle: job.title,
+                jobTitle: jobTitle,
                 companyName: job.companyName,
-                studentName: currentUser.displayName,
+                studentName: studentName,
             });
 
-            // Öğrenci belgesine güncelle
-            await updateDoc(doc(db, "students", currentUser.uid), {
+            // 2. Add to appliedJobs (Using setDoc with merge to avoid 'no document' errors if student doc is incomplete)
+            await setDoc(doc(db, "students", currentUser.uid), {
                 appliedJobs: arrayUnion(id),
+            }, { merge: true });
+
+            // 3. Automatic Message to Company (Job Specific)
+            const q = query(
+                collection(db, "chats"),
+                where("participants", "array-contains", currentUser.uid),
+                where("jobId", "==", id)
+            );
+            const snap = await getDocs(q);
+            let existingChat = snap.docs.find(d => {
+                const data = d.data();
+                return data.participants && data.participants.includes(job.companyId);
+            });
+
+            let chatId;
+            if (existingChat) {
+                chatId = existingChat.id;
+            } else {
+                const chatData = {
+                    participants: [currentUser.uid, job.companyId],
+                    jobId: id,
+                    jobTitle: jobTitle,
+                    participantDetails: [
+                        { id: currentUser.uid, name: studentName },
+                        { id: job.companyId, name: job.companyName || "Şirket" }
+                    ],
+                    lastMessage: "",
+                    lastMessageAt: serverTimestamp(),
+                    createdAt: serverTimestamp()
+                };
+                const chatRef = await addDoc(collection(db, "chats"), chatData);
+                chatId = chatRef.id;
+            }
+
+            const autoMsg = `Merhaba ben ${studentName}, "${jobTitle}" ilanınız için başvurumu yaptım. İşte ön yazım: ${coverLetter || "Belirtilmedi"}`;
+            
+            await addDoc(collection(db, `chats/${chatId}/messages`), {
+                senderId: currentUser.uid,
+                text: autoMsg,
+                createdAt: serverTimestamp()
+            });
+
+            await updateDoc(doc(db, "chats", chatId), {
+                lastMessage: autoMsg,
+                lastMessageAt: serverTimestamp()
             });
 
             setApplied(true);
             setShowApplyModal(false);
-            setSuccess("Başvurunuz başarıyla gönderildi! 🎉");
-            setTimeout(() => window.location.reload(), 1500);
+            setSuccess("Başvurunuz ve mesajınız başarıyla gönderildi! 🎉");
+            setTimeout(() => navigate('/student/dashboard'), 2000);
         } catch (err) {
-            setError("Başvuru gönderilemedi. Tekrar deneyin.");
+            console.error("Başvuru hatası:", err);
+            setError("Başvuru gerçekleştirilemedi. Lütfen sisteme yeniden giriş yapıp tekrar deneyin.");
         }
         setApplying(false);
     };
@@ -125,10 +215,11 @@ export default function JobDetail() {
         }
 
         try {
-            // Mevcut bir sohbet var mı kontrol et
+            // Check if a chat for THIS SPECIFIC JOB already exists
             const q = query(
                 collection(db, "chats"),
-                where("participants", "array-contains", currentUser.uid)
+                where("participants", "array-contains", currentUser.uid),
+                where("jobId", "==", id)
             );
             const snap = await getDocs(q);
             let existingChat = snap.docs.find(d => {
@@ -137,11 +228,13 @@ export default function JobDetail() {
             });
 
             if (existingChat) {
-                navigate("/messages");
+                navigate(`/messages/${existingChat.id}`);
             } else {
-                // Yeni sohbet oluştur
+                // Create a new job-specific chat
                 const chatData = {
                     participants: [currentUser.uid, job.companyId],
+                    jobId: id,
+                    jobTitle: job.title,
                     participantDetails: [
                         { id: currentUser.uid, name: currentUser.displayName || "İsimsiz Kullanıcı" },
                         { id: job.companyId, name: job.companyName || "Şirket" }
@@ -169,7 +262,7 @@ export default function JobDetail() {
                     read: false
                 });
 
-                navigate("/messages");
+                navigate(`/messages/${chatRef.id}`);
             }
         } catch (err) {
             console.error("Sohbet hatası:", err);
@@ -213,17 +306,31 @@ export default function JobDetail() {
     const typeColors = { remote: "success", hybrid: "info", onsite: "warning" };
 
     const handleDeleteJob = async () => {
-        if (!window.confirm("Bu ilanı silmek istediğinizden emin misiniz?")) return;
+        const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve tüm başvurular da silinir.", "İlan Silme");
+        if (!confirmed) return;
+        
+        if (!isAdmin) {
+            showNotification("Bu işlemi gerçekleştirmek için yetkiniz bulunmuyor.", "error", "Hata");
+            return;
+        }
+
         setDeleting(true);
         try {
+            // İlana ait tüm başvuruları temizle
+            const q = query(collection(db, "applications"), where("jobId", "==", id));
+            const snap = await getDocs(q);
+            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
+            await Promise.all(deletePromises);
+
+            // İlanın kendisini temizle
             const deleteDocRef = doc(db, "jobs", id);
-            // Silerken Firestore'dan sil
-            await updateDoc(deleteDocRef, { status: "deleted" }); // Soft delete is safer
-            // await deleteDoc(deleteDocRef); // Or hard delete
-            setSuccess("İlan başarıyla silindi! ✅");
-            setTimeout(() => navigate("/jobs"), 2000);
+            await deleteDoc(deleteDocRef);
+            
+            showNotification(`İlan ve bağlı ${snap.size} başvuru tamamen imha edildi.`, "success", "Operasyon Tamam");
+            navigate("/jobs");
         } catch (err) {
-            setError("İlan silinirken bir hata oluştu.");
+            console.error("İlan imha edilirken hata:", err);
+            showNotification("İlan imha edilirken bir hata oluştu.", "error", "Hata");
         }
         setDeleting(false);
     };
@@ -292,9 +399,193 @@ export default function JobDetail() {
                                 {TYPE_LABELS[job.type] || job.type}
                             </span>
                             {job.sector && <span className="badge badge-primary">{job.sector}</span>}
+                            {job.experienceLevel && <span className="badge badge-info">{job.experienceLevel}</span>}
                             {job.location && <span className="badge badge-muted">📍 {job.location}</span>}
-                            {job.salary && <span className="badge badge-success">💰 {job.salary}</span>}
-                            {job.duration && <span className="badge badge-info">⏱️ {job.duration} ay</span>}
+                        </div>
+                        {/* Info Sections */}
+                        <div className="job-info-sections">
+                            {/* Temel Bilgiler */}
+                            <div className="info-group">
+                                <h3 className="info-group-title">
+                                    <FileText size={16} /> Temel Bilgiler
+                                </h3>
+                                <div className="job-meta-grid">
+                                    {job.position && (
+                                        <div className="meta-item">
+                                            <Briefcase size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Pozisyon</span>
+                                                <span className="meta-value">{job.position}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.department && (
+                                        <div className="meta-item">
+                                            <ShieldCheck size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Birim</span>
+                                                <span className="meta-value">{job.department}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.openings && (
+                                        <div className="meta-item">
+                                            <Users size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Kontenjan</span>
+                                                <span className="meta-value">{job.openings} Kişi</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.startDate && (
+                                        <div className="meta-item">
+                                            <Calendar size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Başlangıç</span>
+                                                <span className="meta-value">{job.startDate}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.duration && (
+                                        <div className="meta-item">
+                                            <Clock size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Süre</span>
+                                                <span className="meta-value">{job.duration}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.salary && (
+                                        <div className="meta-item">
+                                            <Banknote size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Maaş</span>
+                                                <span className="meta-value" style={{ color: 'var(--success-light)' }}>{job.salary}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Aday Kriterleri */}
+                            <div className="info-group">
+                                <h3 className="info-group-title">
+                                    <Target size={16} /> Aday Kriterleri
+                                </h3>
+                                <div className="job-meta-grid">
+                                    {job.minEducation && (
+                                        <div className="meta-item">
+                                            <GraduationCap size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Eğitim</span>
+                                                <span className="meta-value">{job.minEducation}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.experienceLevel && (
+                                        <div className="meta-item">
+                                            <Gauge size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Tecrübe</span>
+                                                <span className="meta-value">{job.experienceLevel}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.language && (
+                                        <div className="meta-item">
+                                            <Languages size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Dil</span>
+                                                <span className="meta-value">{job.language}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.gender && (
+                                        <div className="meta-item">
+                                            <UserCircle2 size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Cinsiyet</span>
+                                                <span className="meta-value">{job.gender}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.ageRange && (
+                                        <div className="meta-item">
+                                            <User size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Yaş Aralığı</span>
+                                                <span className="meta-value">{job.ageRange}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.militaryStatus && (
+                                        <div className="meta-item">
+                                            <Flag size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Askerlik</span>
+                                                <span className="meta-value">{job.militaryStatus ? "Tecilli / Yapıldı" : "Farketmez"}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Diğer Kriterler */}
+                            <div className="info-group">
+                                <h3 className="info-group-title">
+                                    <ClipboardList size={16} /> Diğer Kriterler
+                                </h3>
+                                <div className="job-meta-grid">
+                                    {job.driverLicense && (
+                                        <div className="meta-item">
+                                            <Smartphone size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Ehliyet</span>
+                                                <span className="meta-value">{job.driverLicense}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.travelRequirement && (
+                                        <div className="meta-item">
+                                            <Plane size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Seyahat</span>
+                                                <span className="meta-value">{job.travelRequirement}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {job.disabilityFriendly && (
+                                        <div className="meta-item">
+                                            <Accessibility size={18} className="meta-icon" />
+                                            <div className="meta-content">
+                                                <span className="meta-label">Özel Durum</span>
+                                                <span className="meta-value" style={{ color: 'var(--primary-light)' }}>Engelliye Uygun</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Başvuru Şartları */}
+                            {(job.cvRequired || job.portfolioRequired) && (
+                                <div className="info-group">
+                                    <h3 className="info-group-title">
+                                        <Rocket size={16} /> Başvuru Şartları
+                                    </h3>
+                                    <div className="application-requirements">
+                                        {job.cvRequired && (
+                                            <div className="req-pill">
+                                                <FileText size={14} /> Özgeçmiş (CV) Zorunlu
+                                            </div>
+                                        )}
+                                        {job.portfolioRequired && (
+                                            <div className="req-pill">
+                                                <MousePointer2 size={14} /> Portfolyo / Repo Zorunlu
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -309,6 +600,7 @@ export default function JobDetail() {
                                 <button
                                     className="btn btn-primary btn-lg"
                                     onClick={() => setShowApplyModal(true)}
+                                    disabled={!isProfileComplete} // Disable if profile is not complete
                                 >
                                     📨 Başvur
                                 </button>
@@ -317,14 +609,18 @@ export default function JobDetail() {
                                 className="btn btn-secondary btn-lg"
                                 style={{ marginTop: 12, width: "100%" }}
                                 onClick={handleStartChat}
+                                disabled={!isProfileComplete} // Disable if profile is not complete
                             >
                                 💬 Şirkete Mesaj Yaz
                             </button>
                             {job.deadline && (
                                 <p className="deadline-text">
                                     Son: {(() => {
-                                        const d = new Date(job.deadline);
-                                        return !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : job.deadline;
+                                        let d;
+                                        if (job.deadline?.toDate) d = job.deadline.toDate();
+                                        else d = new Date(job.deadline);
+                                        
+                                        return !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : "—";
                                     })()}
                                 </p>
                             )}
@@ -355,6 +651,30 @@ export default function JobDetail() {
                         <div className="job-skills-list">
                             {job.skills.map((s) => (
                                 <span key={s} className="skill-tag">{s}</span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Requirements */}
+                {job.requirements && (
+                    <div className="card mt-24">
+                        <h2 className="section-title">⚖️ Aday Gereksinimleri</h2>
+                        <div className="job-description">
+                            {job.requirements.split("\n").map((line, i) => (
+                                <p key={i}>{line}</p>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Benefits */}
+                {job.benefits && (
+                    <div className="card mt-24">
+                        <h2 className="section-title">🎁 Sosyal İmkanlar ve Yan Haklar</h2>
+                        <div className="job-description">
+                            {job.benefits.split("\n").map((line, i) => (
+                                <p key={i}>{line}</p>
                             ))}
                         </div>
                     </div>
@@ -402,9 +722,37 @@ export default function JobDetail() {
                                     placeholder="Kendinizi tanıtın, neden bu pozisyon için uygun olduğunuzu belirtin..."
                                     value={coverLetter}
                                     onChange={(e) => setCoverLetter(e.target.value)}
-                                    rows={5}
+                                    rows={4}
                                 />
                             </div>
+
+                            <div className="form-row mt-16">
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        Özgeçmiş (CV) {job.cvRequired && <span style={{ color: 'var(--danger)' }}>* Zorunlu</span>}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        className="form-input"
+                                        accept=".pdf"
+                                        onChange={(e) => setCvFile(e.target.files[0])}
+                                    />
+                                    <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>Sadece PDF formatı desteklenir.</p>
+                                </div>
+                            </div>
+
+                            {job.portfolioRequired && (
+                                <div className="form-group mt-16">
+                                    <label className="form-label">Portfolyo / LinkedIn / Repo Linki <span style={{ color: 'var(--danger)' }}>* Zorunlu</span></label>
+                                    <input
+                                        className="form-input"
+                                        placeholder="https://..."
+                                        value={portfolioUrl}
+                                        onChange={(e) => setPortfolioUrl(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            )}
 
                             <div className="modal-actions">
                                 <button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>İptal</button>

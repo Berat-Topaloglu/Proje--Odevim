@@ -10,7 +10,7 @@ import {
     updateProfile,
     sendEmailVerification,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
 const AuthContext = createContext();
@@ -23,6 +23,17 @@ export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [systemSettings, setSystemSettings] = useState({ maintenance: false });
+
+    // Listen for system settings (Maintenance Mode etc) - Isolated for StajHub
+    useEffect(() => {
+        const unsub = onSnapshot(doc(db, "settings", "stajhub"), (docSnap) => {
+            if (docSnap.exists()) {
+                setSystemSettings(docSnap.data());
+            }
+        });
+        return unsub;
+    }, []);
 
     async function register(email, password, displayName, userType) {
         const result = await createUserWithEmailAndPassword(auth, email, password);
@@ -90,11 +101,12 @@ export function AuthProvider({ children }) {
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
 
         if (!userDoc.exists()) {
+            const photoVal = result.user.photoURL || "";
             const userData = {
                 roles: [selectedType],
                 displayName: result.user.displayName,
                 email: result.user.email,
-                photoURL: result.user.photoURL || "",
+                photoURL: photoVal,
                 createdAt: new Date().toISOString(),
             };
             await setDoc(doc(db, "users", result.user.uid), userData);
@@ -107,6 +119,7 @@ export function AuthProvider({ children }) {
                     skills: [],
                     bio: "",
                     cvUrl: "",
+                    photoUrl: photoVal,
                     appliedJobs: [],
                 });
             } else {
@@ -115,13 +128,30 @@ export function AuthProvider({ children }) {
                     sector: "",
                     website: "",
                     description: "",
-                    logoUrl: "",
+                    logoUrl: photoVal,
                     verified: false,
                 });
             }
         } else {
             // User exists, check if role exists
             const data = userDoc.data();
+            
+            // Check if photoURL update is needed from Google Login
+            const photoVal = result.user.photoURL || "";
+            if (photoVal && !data.photoURL) {
+                 await updateDoc(doc(db, "users", result.user.uid), { photoURL: photoVal });
+                 
+                 // Also Update the role specific if the role already existed
+                 if (data.roles?.includes(selectedType)) {
+                     const roleCollection = selectedType === "student" ? "students" : "companies";
+                     const propName = selectedType === "student" ? "photoUrl" : "logoUrl";
+                     const currentRoleDoc = await getDoc(doc(db, roleCollection, result.user.uid));
+                     if(currentRoleDoc.exists() && !currentRoleDoc.data()[propName]){
+                         await updateDoc(doc(db, roleCollection, result.user.uid), { [propName]: photoVal });
+                     }
+                 }
+            }
+
             if (!data.roles?.includes(selectedType)) {
                 // Add new role to existing user
                 await updateDoc(doc(db, "users", result.user.uid), {
@@ -133,11 +163,11 @@ export function AuthProvider({ children }) {
                 if (!roleDoc.exists()) {
                     if (selectedType === "student") {
                         await setDoc(doc(db, "students", result.user.uid), {
-                            university: "", department: "", gpa: "", skills: [], bio: "", cvUrl: "", appliedJobs: []
+                            university: "", department: "", gpa: "", skills: [], bio: "", cvUrl: "", photoUrl: photoVal, appliedJobs: []
                         });
                     } else {
                         await setDoc(doc(db, "companies", result.user.uid), {
-                            companyName: data.displayName, sector: "", website: "", description: "", logoUrl: "", verified: false
+                            companyName: data.displayName, sector: "", website: "", description: "", logoUrl: photoVal, verified: false
                         });
                     }
                 }
@@ -159,6 +189,7 @@ export function AuthProvider({ children }) {
             setUserProfile({
                 ...userData,
                 type, // Currently active role
+                isAdmin: userData.email === "berattopaloglu61@gmail.com",
                 profileData: roleDoc.exists() ? roleDoc.data() : null
             });
 
@@ -231,6 +262,8 @@ export function AuthProvider({ children }) {
     const value = {
         currentUser,
         userProfile,
+        isAdmin: userProfile?.isAdmin || false,
+        systemSettings,
         register,
         login,
         loginWithGoogle,

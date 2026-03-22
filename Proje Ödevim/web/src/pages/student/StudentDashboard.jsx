@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
-import { Send, Clock, CheckCircle2, XCircle, Search, Star, Edit3, Briefcase, Inbox, Globe, MapPin, Eye } from "lucide-react";
+import { Send, Clock, CheckCircle2, XCircle, Search, Star, Edit3, Briefcase, Inbox, Globe, MapPin, Eye, Sparkles, ClipboardCheck } from "lucide-react";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
 import "./Dashboard.css";
@@ -133,7 +133,7 @@ export default function StudentDashboard() {
                 <div className="dashboard-welcome">
                     <div>
                         <h1 className="dashboard-title">
-                            Merhaba, {currentUser?.displayName ? currentUser.displayName.split(" ")[0] : "Öğrenci"} 👋
+                            Merhaba, {currentUser?.displayName ? currentUser.displayName.split(" ")[0] : "Öğrenci"} <Sparkles className="sparkle-icon" size={28} color="var(--primary)" />
                         </h1>
                         <p className="dashboard-subtitle">Bugün nasıl gidiyor? İşte başvuru özetin:</p>
                     </div>
@@ -155,7 +155,7 @@ export default function StudentDashboard() {
                     <div className="card">
                         <div className="section-header">
                             <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <Send size={20} color="var(--info)" /> Son Başvurularım
+                                <ClipboardCheck size={20} color="var(--info)" /> Son Başvurularım
                             </h2>
                             <Link to="/student/applications" className="see-all">Tümünü Gör →</Link>
                         </div>
@@ -201,11 +201,19 @@ export default function StudentDashboard() {
                             {recommendedJobs.map((job) => (
                                 <Link to={`/jobs/${job.id}`} key={job.id} className="rec-job-item">
                                     <div className="avatar avatar-sm rec-job-logo">
-                                        {job.companyName?.charAt(0)}
+                                        {job.companyLogo ? (
+                                            <img src={job.companyLogo} alt={job.companyName} />
+                                        ) : (
+                                            job.companyName?.charAt(0)
+                                        )}
                                     </div>
                                     <div className="rec-job-info">
                                         <p className="rec-job-title">{job.title}</p>
-                                        <p className="rec-job-company">{job.companyName} · {job.location}</p>
+                                        <p className="rec-job-meta">
+                                            {job.companyName} · {job.location}
+                                            {job.sector && <span className="rec-job-badge">🏷️ {job.sector}</span>}
+                                            {job.experienceLevel && <span className="rec-job-badge">⚡ {job.experienceLevel}</span>}
+                                        </p>
                                     </div>
                                     <span className="rec-job-type">
                                         {job.type === "remote" ? <Globe size={16} /> : <MapPin size={16} />}

@@ -33,6 +33,9 @@ export default function AuthAction() {
         setMode(m);
         setOobCode(code);
 
+        // Omega Security Protocol: Clear URL parameters to hide sensitive tokens
+        window.history.replaceState(null, "", window.location.pathname);
+
         // Verify the code
         checkActionCode(auth, code)
             .then((info) => {

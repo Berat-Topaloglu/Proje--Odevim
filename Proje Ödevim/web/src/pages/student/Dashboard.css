@@ -7,14 +7,14 @@
     gap: 16px;
 }
 
-.dashboard-title {
+/*.dashboard-title {
     font-size: 28px;
     font-weight: 800;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-}
+}*/
 
 .dashboard-subtitle {
     color: var(--text-muted);
@@ -31,33 +31,30 @@
 }
 
 .stat-card {
+    background: rgba(var(--bg-card-rgb), 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    padding: 24px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    border: 1px solid;
+    gap: 20px;
+    border: 1px solid var(--border);
+    transition: var(--transition);
 }
 
-.stat-card-primary {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.2);
+.stat-card:hover {
+    transform: translateY(-4px);
+    background: rgba(var(--bg-card-rgb), 0.6);
+    border-color: var(--primary-light);
+    box-shadow: var(--shadow-glow);
 }
 
-.stat-card-warning {
-    background: rgba(245, 158, 11, 0.08);
-    border-color: rgba(245, 158, 11, 0.2);
-}
+.stat-card-primary { border-left: 4px solid var(--primary); }
+.stat-card-warning { border-left: 4px solid var(--warning); }
+.stat-card-success { border-left: 4px solid var(--success); }
+.stat-card-danger { border-left: 4px solid var(--danger); }
 
-.stat-card-success {
-    background: rgba(16, 185, 129, 0.08);
-    border-color: rgba(16, 185, 129, 0.2);
-}
-
-.stat-card-danger {
-    background: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.2);
-}
 
 .stat-icon {
     font-size: 28px;
@@ -180,10 +177,23 @@
     text-overflow: ellipsis;
 }
 
-.rec-job-company {
+.rec-job-meta {
     font-size: 12px;
     color: var(--text-muted);
-    margin-top: 2px;
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    align-items: center;
+}
+
+.rec-job-badge {
+    background: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary-light);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
 }
 
 /* Empty State */

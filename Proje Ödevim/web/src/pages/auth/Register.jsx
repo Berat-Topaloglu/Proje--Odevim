@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 import "./Auth.css";
 
 export default function Register() {
@@ -10,6 +11,7 @@ export default function Register() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const { register, loginWithGoogle } = useAuth();
+    const { showNotification } = useNotification();
     const navigate = useNavigate();
 
     const handleTypeSelect = (type) => {
@@ -19,9 +21,25 @@ export default function Register() {
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+    const DISALLOWED_DOMAINS = [
+        "temp-mail.org", "10minutemail.com", "guerrillamail.com", "sharklasers.com", 
+        "getnada.com", "mailinator.com", "dispostable.com", "tempmail.net",
+        "yopmail.com", "fakeinbox.com", "moakt.com"
+    ];
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
+
+        const emailDomain = form.email.split("@")[1]?.toLowerCase();
+        if (DISALLOWED_DOMAINS.includes(emailDomain)) {
+            showNotification(
+                "Güvenlik nedeniyle geçici e-posta servisleri desteklenmemektedir. Lütfen kurumsal veya kişisel bir e-posta adresi kullanın.",
+                "warning",
+                "⚠️ Güvenlik Uyarısı"
+            );
+            return;
+        }
 
         if (form.password !== form.confirmPassword) {
             return setError("Şifreler eşleşmiyor.");
@@ -70,7 +88,9 @@ export default function Register() {
 
             <div className="auth-container page-enter">
                 <div className="auth-logo">
-                    <div className="logo-icon">S</div>
+                    <div className="logo-icon">
+                        <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
+                    </div>
                     <span className="logo-text">Staj<span>Hub</span></span>
                 </div>
 

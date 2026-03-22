@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { ClipboardCheck, Clock, CheckCircle2, XCircle, Eye, Inbox } from "lucide-react";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
 import "../student/Dashboard.css";
+import "./StudentApplications.css";
 
 const STATUS_INFO = {
-    pending: { label: "Beklemede", color: "warning", icon: "⏳" },
-    reviewing: { label: "İncelenen", color: "info", icon: "👀" },
-    accepted: { label: "Kabul", color: "success", icon: "✅" },
-    "rejected": { label: "Reddedilen", color: "danger", icon: "❌" },
+    pending: { label: "Beklemede", color: "warning", icon: <Clock size={16} /> },
+    reviewing: { label: "İncelenen", color: "info", icon: <Eye size={16} /> },
+    accepted: { label: "Kabul", color: "success", icon: <CheckCircle2 size={16} /> },
+    rejected: { label: "Reddedilen", color: "danger", icon: <XCircle size={16} /> },
 };
 
 export default function StudentApplications() {
@@ -86,7 +88,9 @@ export default function StudentApplications() {
             <div className="content-wrapper page-enter">
                 <div className="dashboard-welcome">
                     <div>
-                        <h1 className="dashboard-title">📨 Başvurularım</h1>
+                        <h1 className="dashboard-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <ClipboardCheck size={32} color="var(--primary)" /> Başvurularım
+                        </h1>
                         <p className="dashboard-subtitle">{applications.length} toplam başvuru</p>
                     </div>
                     <Link to="/jobs" className="btn btn-primary">🔍 Yeni İlan Ara</Link>
@@ -118,7 +122,7 @@ export default function StudentApplications() {
 
                 {filtered.length === 0 ? (
                     <div className="empty-state card">
-                        <span>📭</span>
+                        <Inbox size={48} color="var(--secondary)" style={{ opacity: 0.5 }} />
                         <p>{filter === "all" ? "Henüz başvurun yok" : "Bu kategoride başvuru yok"}</p>
                         {filter === "all" && <Link to="/jobs" className="btn btn-primary btn-sm mt-16">İlan Ara</Link>}
                     </div>

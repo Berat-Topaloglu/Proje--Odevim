@@ -8,6 +8,7 @@
     position: relative;
     overflow: hidden;
     padding: 24px;
+    background-color: var(--bg-primary);
 }
 
 .auth-bg {
@@ -19,9 +20,10 @@
 .auth-blob {
     position: absolute;
     border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.15;
+    filter: blur(100px);
+    opacity: 0.12;
 }
+
 
 .blob-1 {
     width: 600px;

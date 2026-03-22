@@ -1,15 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { useParams } from "react-router-dom";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, getDocs, serverTimestamp, addDoc } from "firebase/firestore";
 import { updateProfile, updatePassword } from "firebase/auth";
 import { uploadToCloudinary } from "../../utils/cloudinary";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
 import "./StudentProfile.css";
 
-const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "Figma", "SQL", "Git", "TypeScript", "Vue.js", "C#", "C++", "PHP", "Swift", "Kotlin", "Flutter", "Django", "MongoDB", "PostgreSQL", "MySQL", "AWS", "Docker", "Machine Learning"];
+//const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "Figma", "SQL", "Git", "TypeScript", "Vue.js", "C#", "C++", "PHP", "Swift", "Kotlin", "Flutter", "Django", "MongoDB", "PostgreSQL", "MySQL", "AWS", "Docker", "Machine Learning"];
 
 export default function StudentProfile() {
+    const { id: paramId } = useParams();
     const { currentUser, userProfile, updateDisplayName, logout } = useAuth();
+    
+    // Determine whose profile to show
+    const effectiveId = paramId || currentUser?.uid;
+    const isOwnProfile = !paramId || paramId === currentUser?.uid;
+
     const [profile, setProfile] = useState({
         university: "", department: "", gpa: "", bio: "", skills: [], cvUrl: "",
         displayName: currentUser?.displayName || ""
@@ -23,14 +30,19 @@ export default function StudentProfile() {
     const [error, setError] = useState("");
     const [skillInput, setSkillInput] = useState("");
     const [reviews, setReviews] = useState([]);
-    
+
+    // Available Skills State
+    const [availableSkills, setAvailableSkills] = useState([]);
+
     // Auth error modal
     const [authErrorModal, setAuthErrorModal] = useState(false);
 
     // Password state
     const [newPassword, setNewPassword] = useState("");
     const [settingPassword, setSettingPassword] = useState(false);
+    const [passwordSuccessModal, setPasswordSuccessModal] = useState(false);
     const isGoogleSignIn = currentUser?.providerData?.some(provider => provider.providerId === 'google.com');
+    const hasPassword = currentUser?.providerData?.some(provider => provider.providerId === 'password');
 
     // Camera & Modal States
     const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -39,24 +51,49 @@ export default function StudentProfile() {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
 
+    // Company Rating State
+    const [ratingValue, setRatingValue] = useState(5);
+    const [ratingComment, setRatingComment] = useState("");
+    const [submittingRating, setSubmittingRating] = useState(false);
+    const [reportModal, setReportModal] = useState({ show: false, studentId: "", studentName: "" });
+    const [reportReason, setReportReason] = useState("");
+    const [reporting, setReporting] = useState(false);
+
     useEffect(() => {
         const fetchData = async () => {
-            if (!currentUser) return;
+            if (!effectiveId) return;
             try {
-                const snap = await getDoc(doc(db, "students", currentUser.uid));
+                // Fetch basic user data (for email/name) from users collection
+                const uDoc = await getDoc(doc(db, "users", effectiveId));
+                let userData = {};
+                if (uDoc.exists()) {
+                    userData = uDoc.data();
+                }
+
+                const snap = await getDoc(doc(db, "students", effectiveId));
                 if (snap.exists()) {
                     const data = snap.data();
                     setProfile(prev => ({
                         ...prev,
                         ...data,
+                        email: userData.email || data.email || "",
+                        displayName: userData.displayName || data.displayName || prev.displayName,
                         skills: data.skills || [],
-                        displayName: currentUser?.displayName || ""
+                        photoUrl: data.photoUrl || userData.photoUrl || userData.photoURL || prev.photoUrl
+                    }));
+                } else if (uDoc.exists()) {
+                    // If only user document exists (maybe hasn't filled profile yet)
+                    setProfile(prev => ({
+                        ...prev,
+                        email: userData.email || "",
+                        displayName: userData.displayName || prev.displayName,
+                        photoUrl: userData.photoUrl || userData.photoURL || prev.photoUrl
                     }));
                 }
 
                 const q = query(
                     collection(db, "reviews"),
-                    where("toId", "==", currentUser.uid)
+                    where("toId", "==", effectiveId)
                 );
                 const reviewSnap = await getDocs(q);
                 const reviewData = reviewSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -79,9 +116,92 @@ export default function StudentProfile() {
         return () => {
             stopCamera();
         };
-    }, [currentUser]);
+    }, [effectiveId, currentUser]);
+
+    const handleCompanyRating = async () => {
+        if (!currentUser || userProfile?.type !== "company") return;
+        setSubmittingRating(true);
+        setError("");
+        setSuccess("");
+        
+        try {
+            const reviewId = `${currentUser.uid}_${effectiveId}`;
+            const reviewRef = doc(db, "reviews", reviewId);
+            
+            const reviewData = {
+                fromId: currentUser.uid,
+                toId: effectiveId,
+                rating: ratingValue,
+                comment: ratingComment,
+                jobTitle: "Şirket Değerlendirmesi",
+                createdAt: new Date().toISOString()
+            };
+
+            const snap = await getDoc(reviewRef);
+            if (snap.exists()) {
+                await updateDoc(reviewRef, { 
+                    rating: ratingValue, 
+                    comment: ratingComment,
+                    updatedAt: new Date().toISOString() 
+                });
+            } else {
+                await setDoc(reviewRef, reviewData);
+            }
+
+            setSuccess("Değerlendirmeniz başarıyla kaydedildi! ⭐");
+            setRatingComment("");
+            
+            // Refetch reviews
+            const q = query(collection(db, "reviews"), where("toId", "==", effectiveId));
+            const reviewSnap = await getDocs(q);
+            setReviews(reviewSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => {
+                const getTs = (x) => x.createdAt?.toMillis ? x.createdAt.toMillis() : new Date(x.createdAt || 0).getTime();
+                return getTs(b) - getTs(a);
+            }));
+
+        } catch (err) {
+            console.error("Rating error:", err);
+            setError("Değerlendirme gönderilirken bir hata oluştu.");
+        }
+        setSubmittingRating(false);
+    };
+
+    const handleReportSubmit = async () => {
+        if (!reportReason.trim() || !currentUser) return;
+        setReporting(true);
+        try {
+            // Write report
+            await addDoc(collection(db, "reports"), {
+                reporterId: currentUser.uid,
+                reporterName: userProfile?.displayName || "Bir Şirket",
+                targetId: effectiveId,
+                targetName: profile.displayName,
+                reason: reportReason,
+                status: "pending",
+                createdAt: serverTimestamp()
+            });
+
+            // Notify reporter (company)
+            await addDoc(collection(db, `notifications/${currentUser.uid}/items`), {
+                type: "system",
+                message: `${profile.displayName} hakkındaki ihbarınız merkeze iletildi. Gereği yapılacaktır.`,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+
+            setReportModal({ show: false, studentId: "", studentName: "" });
+            setReportReason("");
+            setSuccess("İhbarınız başarıyla merkeze iletildi! 🛡️");
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error("Report error:", err);
+            setError("İhbar iletilemedi.");
+        }
+        setReporting(false);
+    };
 
     const handleSave = async () => {
+        if (!isOwnProfile) return;
         setSaving(true);
         try {
             // Update auth and users table
@@ -89,9 +209,9 @@ export default function StudentProfile() {
                 await updateDisplayName(profile.displayName);
             }
 
-            const { displayName, ...roleData } = profile;
+            const { displayName, email, ...roleData } = profile;
             await setDoc(doc(db, "students", currentUser.uid), roleData, { merge: true });
-            
+
             setEditMode(false);
             setSuccess("Profil güncellendi! ✅");
             setTimeout(() => setSuccess(""), 3000);
@@ -106,9 +226,8 @@ export default function StudentProfile() {
         setSettingPassword(true);
         try {
             await updatePassword(currentUser, newPassword);
-            setSuccess("Şifreniz başarıyla oluşturuldu! ✅");
             setNewPassword("");
-            setTimeout(() => setSuccess(""), 3000);
+            setPasswordSuccessModal(true);
         } catch (err) {
             if (err.code === "auth/requires-recent-login") {
                 setAuthErrorModal(true);
@@ -259,16 +378,108 @@ export default function StudentProfile() {
 
     const suggestSkills = (dept) => {
         const mapping = {
-            "bilgisayar": ["JavaScript", "React", "Node.js", "SQL", "Git", "Python"],
-            "yazılım": ["JavaScript", "React", "Node.js", "SQL", "Git", "Java"],
-            "tasarım": ["Figma", "CSS", "HTML", "UI/UX"],
-            "endüstri": ["SQL", "Python", "Data Analysis", "Excel"],
-            "elektrik": ["C++", "Python", "MATLAB", "Embedded Systems"],
-            "makine": ["AutoCAD", "SolidWorks", "Python"],
-            "pazarlama": ["SEO", "Google Analytics", "Content Marketing"],
+            // Mühendislikler
+            "bilgisayar": ["JavaScript", "React", "Node.js", "SQL", "Git", "Python", "Java", "C#", "C++", "Docker", "AWS", "Go", "TypeScript", "NoSQL", "Machine Learning", "System Design", "Agile", "Linux", "Data Structures"],
+            "yazılım": ["JavaScript", "React", "Node.js", "SQL", "Git", "Java", "C#", "Python", "Docker", "Kubernetes", "CI/CD", "Software Architecture", "TDD", "REST API", "GraphQL"],
+            "bilişim": ["Siber Güvenlik", "Ağ Yönetimi", "Network Security", "Penetration Testing", "Cloud Computing", "Linux", "Veritabanı Yönetimi", "ITIL"],
+            "endüstri": ["SQL", "Python", "Data Analysis", "Excel", "Optimizasyon", "Yalın Üretim", "Supply Chain Management", "ERP", "SAP", "Six Sigma", "Operations Research", "Simülasyon", "Veri Madenciliği"],
+            "elektrik": ["C++", "Python", "MATLAB", "Embedded Systems", "PLC", "Devre Tasarımı", "AutoCAD Electrical", "Güç Sistemleri", "Otomasyon", "Sinyal İşleme", "Mikrodenetleyiciler"],
+            "elektronik": ["C++", "MATLAB", "Embedded Systems", "PLC", "Devre Tasarımı", "Altium Designer", "PCB", "IoT", "Sensörler", "RF Tasarımı"],
+            "makine": ["AutoCAD", "SolidWorks", "Python", "Termodinamik", "CAD/CAM", "ANSYS", "Finite Element Analysis (FEA)", "Catia", "İmalat Yöntemleri", "Akışkanlar Mekaniği", "Robotik", "CNC"],
+            "inşaat": ["AutoCAD", "Revit", "SAP2000", "ETABS", "Civil 3D", "Primavera P6", "Statik Hesap", "Şantiye Yönetimi", "Proje Yönetimi", "Yapı Malzemeleri", "Zemin Mekaniği"],
+            "mimarlık": ["AutoCAD", "Revit", "SketchUp", "3ds Max", "Lumion", "Photoshop", "Rhino", "V-Ray", "İç Mekan Tasarımı", "BIM", "Maket Yapımı", "Sürdürülebilir Tasarım", "Archicad"],
+            "mekatronik": ["Python", "C++", "MATLAB", "SolidWorks", "PLC", "Robotik", "Arduino/Raspberry Pi", "Otomasyon", "Görüntü İşleme", "Kontrol Sistemleri"],
+            "uzay": ["Aerodinamik", "Catia", "MATLAB", "ANSYS", "Python", "Uçuş Mekaniği", "Termodinamik", "İtki Sistemleri"],
+            "havacılık": ["Aerodinamik", "Catia", "MATLAB", "ANSYS", "Python", "Uçuş Mekaniği", "Termodinamik", "İtki Sistemleri"],
+            "uçak": ["Aerodinamik", "Catia", "MATLAB", "ANSYS", "Python", "Uçuş Mekaniği", "Sistem Mühendisliği"],
+            "kimya mühendisliği": ["Process Engineering", "Aspen HYSYS", "MATLAB", "Termodinamik", "Polimer Kimyası", "Kalite Kontrol", "Laboratuvar Teknikleri", "Chemcad"],
+            "biyomedikal": ["Biyomalzemeler", "Tıbbi Cihazlar", "Sinyal İşleme", "MATLAB", "Görüntü İşleme", "Python", "Arduino", "Anatomi", "Biyomekanik"],
+            
+            // Doğa Bilimleri ve Matematik
+            "matematik": ["Python", "SQL", "MATLAB", "İstatistik", "R", "Data Analysis", "Optimization", "Problem Çözme", "Algoritma Analizi"],
+            "fizik": ["Python", "MATLAB", "Data Analysis", "Kuantum Fiziği", "İstatistiksel Mekanik", "Laboratuvar Yöntemleri", "Radyasyon Güvenliği", "Veri Modelleme"],
+            "kimya": ["Laboratuvar Spektroskopisi", "Kromatografi (HPLC/GC)", "Organik Sentez", "Araştırma Geliştirme (Ar-Ge)", "Analitik Kimya", "Veri Analizi", "Kalite Kontrol"],
+            "biyoloji": ["Genetik Analiz", "Mikrobiyoloji", "Moleküler Biyoloji", "PCR", "Biyoinformatik", "Laboratuvar Güvenliği", "Python", "R"],
+            "biyoteknoloji": ["Hücre Kültürü", "CRISPR", "Genetik Mühendisliği", "Biyokimya", "Veri Analizi", "Laboratuvar Yönetimi"],
+            "istatistik": ["R", "Python", "SQL", "SAS", "SPSS", "Machine Learning", "Data Visualization", "Veri Madenciliği", "Ekonometri", "Tableau", "Power BI"],
+            
+            // Sağlık Bilimleri
+            "tıp": ["İlk Yardım", "Hasta Bakımı", "Tıbbi Terminoloji", "Anatomi", "Kriz Yönetimi", "İletişim", "Tanı ve Tedavi", "Klinik Araştırma", "Cerrahi Uygulamalar", "Pediatri", "Dahiliye", "Farmakoloji"],
+            "hekimlik": ["İlk Yardım", "Hasta Bakımı", "Tıbbi Terminoloji", "Anatomi", "Kriz Yönetimi", "İletişim", "Tanı ve Tedavi"],
+            "diş hekimliği": ["Ağız ve Diş Sağlığı", "Protetik Diş Tedavisi", "Ortodonti", "Endodonti", "Hasta İletişimi", "Röntgen Analizi", "Cerrahi Müdahale"],
+            "hemşirelik": ["İlk Yardım", "Hasta Bakımı", "Tıbbi Terminoloji", "Kriz Yönetimi", "İlaç Uygulamaları", "Hasta İletişimi", "Vital Bulgular", "Kan Alma", "Yoğun Bakım", "Pediatrik Bakım"],
+            "eczacılık": ["Farmakoloji", "İlaç Etkileşimleri", "Toksikoloji", "Hasta Danışmanlığı", "Laboratuvar Uygulamaları", "Klinik Eczacılık", "Dozaj Hesaplama"],
+            "sağlık yönetimi": ["Sağlık Ekonomisi", "Hastane Yönetimi", "Kalite Yönetimi", "Kriz Yönetimi", "İletişim", "Finans", "Sağlık Bilişimi"],
+            "fizyoterapi": ["Anatomi", "Kinezyoloji", "Rehabilitasyon", "Manuel Terapi", "Egzersiz Fizyolojisi", "Hasta İletişimi", "Masaj Terapisi", "Ortopedik Rehabilitasyon"],
+            "veteriner": ["Hayvan Anatomisi", "Hayvan Sağlığı", "Cerrahi Müdahale", "Aşı Uygulamaları", "Zootekni", "Farmakoloji"],
+            
+            // İktisadi ve İdari Bilimler
+            "ekonomi": ["Finansal Analiz", "Muhasebe", "Risk Yönetimi", "Bütçeleme", "Excel", "Makroekonomi", "Mikroekonomi", "Ekonometri", "Stata", "R", "Python", "Veri Analizi"],
+            "iktisat": ["Finansal Analiz", "Muhasebe", "Risk Yönetimi", "Bütçeleme", "Excel", "Makroekonomi", "Mikroekonomi", "Ekonometri", "Stata", "R", "Python", "Veri Analizi"],
+            "işletme": ["Proje Yönetimi", "Liderlik", "Pazarlama", "Muhasebe", "Excel", "Stratejik Planlama", "İnsan Kaynakları", "Finans", "SWOT Analizi", "Müşteri İlişkileri", "Girişimcilik", "B2B Marketing"],
+            "maliye": ["Vergi Hukuku", "Muhasebe", "Kamu Maliyesi", "Finansal Analiz", "Bütçeleme", "Mali Denetim", "SAP", "Excel"],
+            "uluslararası ilişkiler": ["Araştırma", "Diplomasi", "Politik Analiz", "Dil Becerileri", "Kültürlerarası İletişim", "Kriz Yönetimi", "Müzakere", "Sunum Becerileri", "Raporlama"],
+            "siyaset": ["Araştırma", "Diplomasi", "Politik Analiz", "Kamu Yönetimi", "Kriz Yönetimi", "Eleştirel Düşünme"],
+            "kamu yönetimi": ["Mevzuat Bilgisi", "Yerel Yönetimler", "Politika Geliştirme", "İnsan Kaynakları", "Stratejik Planlama"],
+            "çalışma ekonomisi": ["İş Hukuku", "İnsan Kaynakları Yönetimi", "Sosyal Güvenlik", "Bordro", "Sendika İlişkileri", "Performans Değerlendirme"],
+            "insan kaynakları": ["İşe Alım", "Bordro", "Eğitim ve Gelişim", "Performans Değerlendirme", "İş Hukuku", "Çalışan Bağlılığı", "Yetenek Yönetimi", "İK Analitiği", "Kariyer Planlama"],
+            
+            // Sosyal ve Beşeri Bilimler
+            "psikoloji": ["Klinik Gözlem", "Görüşme Teknikleri", "Araştırma Yöntemleri", "İstatistik (SPSS)", "Veri Analizi", "Empati", "İletişim", "Nöropsikoloji", "Bilişsel Terapi"],
+            "sosyoloji": ["Sosyal Araştırma Yöntemleri", "Veri Analizi (SPSS/R)", "Saha Çalışması", "Kültürel Analiz", "Eleştirel Düşünme", "Anket Tasarımı", "Raporlama"],
+            "felsefe": ["Eleştirel Düşünme", "Mantıksal Analiz", "Argüman Geliştirme", "Araştırma", "Etik Değerlendirme", "Yazılı İletişim", "Kavramsal Analiz"],
+            "tarih": ["Arşiv Araştırması", "Veri Analizi", "Eleştirel Düşünme", "Yazılı İletişim", "Müzecilik", "Sosyokültürel Analiz", "Metin Çevirisi"],
+            "coğrafya": ["CBS (Coğrafi Bilgi Sistemleri)", "ArcGIS", "QGIS", "Kartografi", "Araştırma", "Veri Analizi", "Saha Çalışması", "Çevre Etki Değerlendirmesi", "Uzaktan Algılama"],
+            "edebiyat": ["Metin Analizi", "Yaratıcı Yazarlık", "Eleştirel Düşünme", "Editörlük", "İletişim", "Araştırma", "Çeviri"],
+            "iletişim": ["Metin Yazarlığı", "Halkla İlişkiler (PR)", "Kurumsal İletişim", "Medya Okuryazarlığı", "Sosyal Medya Yönetimi", "Kriz İletişimi", "Sunum Becerileri"],
+            "halkla ilişkiler": ["Kriz Yönetimi", "Basın Bülteni Tasarımı", "Medya İlişkileri", "Sponsorluk", "Etkinlik Yönetimi", "Sosyal Medya Yönetimi", "Metin Yazarlığı", "Kurumsal İletişim"],
+            "gazetecilik": ["Haber Yazımı", "Röportaj Teknikleri", "Kurgu", "Araştırmacı Gazetecilik", "SEO", "Dijital Medya", "Fotoğrafçılık", "Video Montajı"],
+            "radyo ve televizyon": ["Kurgu (Premiere Pro, Final Cut)", "Senaryo Yazımı", "Kamera Kullanımı", "Yönetmenlik", "Canlı Yayın Akışı", "Ses Tasarımı"],
+            "reklamcılık": ["Metin Yazarlığı", "Pazarlama Stratejisi", "Medya Planlama", "Müşteri İlişkileri", "Adobe Creative Cloud", "Dijital Pazarlama", "SEO/SEM"],
+            
+            // Hukuk
+            "hukuk": ["Mevzuat Bilgisi", "Dava Takibi", "Sözleşme Hazırlama", "Araştırma", "Müzakere", "Uyuşmazlık Çözümü", "Ticaret Hukuku", "İş Hukuku", "Ceza Hukuku", "Medeni Hukuk", "Uluslararası Hukuk", "Hukuki Danışmanlık", "Adli Yazışmalar"],
+            "adalet": ["Mevzuat Bilgisi", "Dosya Yönetimi", "Hukuki Yazışmalar", "İcra Takibi", "Kalem İşleri"],
+            
+            // Eğitim Bilimleri
+            "öğretmenlik": ["Eğitim Psikolojisi", "Sınıf Yönetimi", "Müfredat Geliştirme", "Ölçme ve Değerlendirme", "Sunum Becerileri", "İletişim", "Eğitim Teknolojileri", "İçerik Geliştirme", "Özel Eğitim"],
+            "eğitim bilimleri": ["Araştırma Yöntemleri", "Eğitim Planlaması", "Psikolojik Danışmanlık", "Eğitim Yönetimi", "İstatistik"],
+            
+            // Tasarım ve Sanat
+            "görsel iletişim": ["Grafik Tasarım", "Adobe Creative Cloud", "UX/UI Tasarım", "Tipografi", "Video Kurgu (Premiere)", "Hareketli Grafik (After Effects)", "Dijital İllüstrasyon", "Web Tasarım"],
+            "endüstriyel tasarım": ["Rhinoceros", "SolidWorks", "3D Modelleme", "Prototipleme", "Tasarım Odaklı Düşünme", "Kullanıcı Deneyimi (UX)", "Ergonomi", "Malzeme Bilimi", "Sketching"],
+            "moda tasarımı": ["Kalıp Çıkarma", "Dikiş Teknikleri", "Tekstil Bilgisi", "Adobe Illustrator", "Moda İllüstrasyonu", "Trend Analizi", "Koleksiyon Hazırlama"],
+            "iç mimarlık": ["AutoCAD", "SketchUp", "3ds Max", "Revit", "V-Ray", "Photoshop", "Mobilya Tasarımı", "Aydınlatma Tasarımı", "Malzeme Bilgisi"],
+            "animasyon": ["2D Animasyon", "3D Animasyon", "Maya", "Blender", "After Effects", "Karakter Tasarımı", "Storyboard İşlemleri"],
+            "grafik": ["Photoshop", "Illustrator", "InDesign", "CorelDraw", "Kurumsal Kimlik Tasarımı", "Tipografi", "Renk Teorisi", "Ambalaj Tasarımı"],
+            
+            // Turizm ve Gastronomi
+            "turizm": ["Otel Yönetimi", "Müşteri İlişkileri", "Rehberlik", "Etkinlik Planlama", "Yabancı Dil", "Amadeus / Galileo", "Rezervasyon Sistemleri", "Satış ve Pazarlama"],
+            "gastronomi": ["Mutfak Yönetimi", "Gıda Güvenliği", "Menü Planlama", "Maliyet Kontrolü", "Dünya Mutfakları", "Pastacılık", "İnovatif Pişirme Teknikleri"],
+            
+            // Spor Bilimleri
+            "spor bilimleri": ["Anatomi", "Antrenman Bilgisi", "Beslenme Bilgisi", "Kinezyoloji", "Spor Psikolojisi", "Fiziksel Kondisyon", "Spor Yönetimi", "Etkinlik Yönetimi"],
+            
+            // Diğer
+            "maden": ["Maden Tasarımı", "Cevher Hazırlama", "AutoCAD", "Saha Yönetimi", "İş Sağlığı ve Güvenliği", "Netcad", "Patlatma Teknikleri", "Jeoloji"],
+            "jeoloji": ["Saha Araştırması", "CBS (GIS)", "Netcad", "ArcGIS", "Veri Analizi", "Zemin Etüdü", "Sondaj Takibi"],
+            "çevre": ["Atık Yönetimi", "ÇED Raporlama", "Su Arıtma Tasarımı", "AutoCAD", "Çevre Mevzuatı", "Sürdürülebilirlik", "Karbon Ayak İzi Hesaplama", "Geri Dönüşüm Sistemleri"],
+            "gıda mühendisliği": ["Kalite Kontrol (HACCP)", "Gıda Mikrobiyolojisi", "Üretim Planlama", "Ar-Ge", "Gıda Güvenliği Standartları", "Ambalajlama", "Laboratuvar Uygulamaları"],
+            "tekstil": ["İplik ve Kumaş Üretimi", "Kalite Kontrol", "Ürün Geliştirme (Ar-Ge)", "Malzeme Bilimi", "Üretim Planlama", "Pazarlama"],
+            "harita mühendisliği": ["CBS (GIS)", "Netcad", "AutoCAD", "Fotogrametri", "Uzaktan Algılama", "Geodezi", "Topoğrafya"],
+            "tarım": ["Tarımsal Üretim", "Bitki Koruma", "Toprak Bilimi", "Sulama Sistemleri", "Sürdürülebilir Tarım", "Agrobilişim"],
+            "ziraat": ["Tarımsal Üretim", "Bitki Koruma", "Toprak Bilimi", "Sulama Sistemleri", "Sürdürülebilir Tarım", "Agrobilişim"],
+            "lojistik": ["Tedarik Zinciri Yönetimi", "Depo Yönetimi", "Gümrük Mevzuatı", "Nakliye Organizasyonu", "ERP", "SAP", "Operasyon Yönetimi", "Envanter Kontrolü"],
+            "denizcilik": ["Gemi Yönetimi", "Deniz Hukuku", "Lojistik Yönetimi", "Navigasyon", "Deniz Emniyeti", "Liman İşletmeciliği"]
         };
 
-        const lowerDept = (dept || "").toLowerCase();
+        const lowerDept = (dept || "").toLowerCase().trim();
+        
+        if (!lowerDept) {
+            setAvailableSkills([]);
+            return;
+        }
+
         let foundSkills = [];
         
         Object.keys(mapping).forEach(key => {
@@ -278,16 +489,16 @@ export default function StudentProfile() {
         });
 
         if (foundSkills.length > 0) {
-            setProfile(p => ({
-                ...p,
-                skills: Array.from(new Set([...(p.skills || []), ...foundSkills]))
-            }));
-            setSuccess("Bölümüne uygun beceriler eklendi! ✨");
-            setTimeout(() => setSuccess(""), 3000);
+            // Sadece bulunan (bölüme ait) yetenekleri göster
+            const newSkills = Array.from(new Set(foundSkills));
+            setAvailableSkills(newSkills);
+        } else {
+            // Hiçbir eşleşme yoksa alanı boşalt
+            setAvailableSkills([]);
         }
     };
 
-    const initials = (currentUser?.displayName || currentUser?.email || "?")
+    const initials = (profile.displayName || profile.email || "?")
         .split(" ")
         .filter(Boolean)
         .map((n) => n[0])
@@ -307,27 +518,30 @@ export default function StudentProfile() {
         <div className="page-wrapper">
             <div className="content-wrapper page-enter" style={{ maxWidth: 750 }}>
                 {success && <div className="alert alert-success mb-16">{success}</div>}
+                {error && <div className="alert alert-danger mb-16">{error}</div>}
 
                 {/* Profile Header */}
                 <div className="profile-header card">
                     <div className="profile-avatar-container">
-                        <div className="avatar avatar-xl profile-avatar" onClick={() => setShowPhotoModal(true)} style={{ cursor: "pointer" }}>
-                            {profile.photoUrl ? (
-                                <img src={profile.photoUrl} alt="Profil" className="avatar-img" />
+                        <div className="avatar avatar-xl profile-avatar" onClick={() => isOwnProfile && setShowPhotoModal(true)} style={{ cursor: isOwnProfile ? "pointer" : "default" }}>
+                            {(profile.photoUrl || (isOwnProfile && currentUser?.photoURL)) ? (
+                                <img src={profile.photoUrl || (isOwnProfile && currentUser?.photoURL)} alt="Profil" className="avatar-img" />
                             ) : initials}
                         </div>
-                        <button className="photo-upload-badge" title="Fotoğraf Değiştir" onClick={() => setShowPhotoModal(true)}>
-                            📷
-                        </button>
+                        {isOwnProfile && (
+                            <button className="photo-upload-badge" title="Fotoğraf Değiştir" onClick={() => setShowPhotoModal(true)}>
+                                📷
+                            </button>
+                        )}
                     </div>
                     <div className="profile-header-info">
-                        <h1 className="profile-name">{currentUser?.displayName}</h1>
-                        <p className="profile-email">{currentUser?.email}</p>
+                        <h1 className="profile-name">{profile.displayName || "İsimsiz Öğrenci"}</h1>
+                        <p className="profile-email">{profile.email || "E-posta belirtilmedi"}</p>
                         <span className="badge badge-primary">
                             🎓 Öğrenci
                         </span>
                     </div>
-                    {!editMode && (
+                    {isOwnProfile && !editMode && (
                         <button className="btn btn-secondary" onClick={() => setEditMode(true)}>
                             ✏️ Düzenle
                         </button>
@@ -351,20 +565,18 @@ export default function StudentProfile() {
                                 <input className="form-input" value={profile.university} onChange={e => setProfile(p => ({ ...p, university: e.target.value }))} placeholder="Örn: İTÜ" />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Bölüm (Enter: Becerileri Öner)</label>
-                                <input 
-                                    className="form-input" 
-                                    value={profile.department} 
-                                    onChange={e => setProfile(p => ({ ...p, department: e.target.value }))} 
-                                    onKeyDown={e => {
-                                        if (e.key === "Enter") {
-                                            e.preventDefault();
-                                            suggestSkills(profile.department);
-                                        }
+                                <label className="form-label">Bölüm</label>
+                                <input
+                                    className="form-input"
+                                    value={profile.department || ""}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setProfile(p => ({ ...p, department: val }));
+                                        suggestSkills(val);
                                     }}
-                                    placeholder="Örn: Bilgisayar Mühendisliği" 
+                                    placeholder="Örn: Bilgisayar Mühendisliği"
                                 />
-                                <small style={{ color: "var(--text-muted)", fontSize: 11 }}>Enter'a basarak bölüme uygun becerileri ekleyebilirsiniz.</small>
+                                <small style={{ color: "var(--text-muted)", fontSize: 11 }}>Bölümünüzü yazdıkça beceriler listesi anında güncellenir.</small>
                             </div>
                             <div className="form-group">
                                 <label className="form-label">GPA / Not Ortalaması</label>
@@ -391,7 +603,7 @@ export default function StudentProfile() {
                     {editMode ? (
                         <>
                             <div className="skills-grid">
-                                {SKILLS_LIST.map((s) => (
+                                {availableSkills.map((s) => (
                                     <button
                                         key={s}
                                         onClick={() => toggleSkill(s)}
@@ -426,9 +638,9 @@ export default function StudentProfile() {
                         </>
                     ) : (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                            {profile.skills.length === 0 ? (
+                            {(profile.skills || []).length === 0 ? (
                                 <p style={{ color: "var(--text-muted)" }}>Henüz beceri eklenmedi</p>
-                            ) : profile.skills.map((s) => (
+                            ) : (profile.skills || []).map((s) => (
                                 <span key={s} className="badge badge-primary" style={{ fontSize: 13, padding: "6px 12px" }}>{s}</span>
                             ))}
                         </div>
@@ -454,7 +666,7 @@ export default function StudentProfile() {
                                             >
                                                 👁️ Görüntüle
                                             </a>
-                                            <button className="cv-delete-btn" onClick={handleDeleteCV}>🗑️ Sil</button>
+                                            {isOwnProfile && <button className="cv-delete-btn" onClick={handleDeleteCV}>🗑️ Sil</button>}
                                         </div>
                                     </div>
                                 </div>
@@ -462,10 +674,12 @@ export default function StudentProfile() {
                         ) : (
                             <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Henüz CV yüklenmedi</p>
                         )}
-                        <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
-                            {uploadingCV ? "Yükleniyor..." : (profile.cvUrl ? "📤 Güncelle" : "📤 CV Yükle")}
-                            <input type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }} onChange={handleCVUpload} disabled={uploadingCV} />
-                        </label>
+                        {isOwnProfile && (
+                            <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
+                                {uploadingCV ? "Yükleniyor..." : (profile.cvUrl ? "📤 Güncelle" : "📤 CV Yükle")}
+                                <input type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }} onChange={handleCVUpload} disabled={uploadingCV} />
+                            </label>
+                        )}
                     </div>
                 </div>
 
@@ -541,18 +755,54 @@ export default function StudentProfile() {
                             reviews.map((r) => (
                                 <div key={r.id} className="review-item" style={{ padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                        <span style={{ fontWeight: 700, color: "var(--primary-color)" }}>{r.jobTitle}</span>
+                                        <span style={{ fontWeight: 700, color: "var(--primary-color)" }}>{r.jobTitle || "Değerlendirme"}</span>
                                         <span style={{ color: "var(--warning)" }}>{"⭐".repeat(r.rating)}</span>
                                     </div>
-                                    <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{r.comment}</p>
+                                    <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{r.comment || "Yorum yok."}</p>
                                     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                                        {r.createdAt?.toDate()?.toLocaleDateString("tr-TR")}
+                                        {r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("tr-TR") : (r.createdAt ? new Date(r.createdAt).toLocaleDateString("tr-TR") : "—")}
                                     </span>
                                 </div>
                             ))
                         )}
                     </div>
                 </div>
+
+                {/* Company Action: Rate Student */}
+                {!isOwnProfile && userProfile?.type === "company" && (
+                    <div className="card mt-24">
+                        <h2 className="section-title2">⭐ Öğrenciyi Değerlendir</h2>
+                        <p className="text-muted" style={{ marginBottom: 16 }}>Bu öğrencinin performansını veya profilini değerlendirin:</p>
+                        <div className="rating-form">
+                            <div style={{ display: "flex", justifyContent: "center", gap: "10px", fontSize: "32px", marginBottom: "16px" }}>
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <span 
+                                        key={star} 
+                                        onClick={() => setRatingValue(star)} 
+                                        style={{ cursor: "pointer", color: star <= ratingValue ? "#fbbf24" : "#475569" }}
+                                    >
+                                        ★
+                                    </span>
+                                ))}
+                            </div>
+                            <textarea
+                                className="form-textarea"
+                                placeholder="Öğrenci hakkında yorumunuzu buraya yazın..."
+                                value={ratingComment}
+                                onChange={e => setRatingComment(e.target.value)}
+                                rows={3}
+                            />
+                            <button 
+                                className="btn btn-primary" 
+                                style={{ width: "100%", marginTop: "16px" }}
+                                onClick={handleCompanyRating}
+                                disabled={submittingRating}
+                            >
+                                {submittingRating ? "Gönderiliyor..." : "Değerlendirmeyi Kaydet"}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Save/Cancel */}
                 {editMode && (
@@ -565,7 +815,7 @@ export default function StudentProfile() {
                 )}
 
                 {/* Password Setting for Google Users */}
-                {isGoogleSignIn && !editMode && (
+                {isOwnProfile && isGoogleSignIn && !hasPassword && !editMode && (
                     <div className="card mt-24">
                         <h2 className="section-title2">🔒 Şifre Belirle</h2>
                         <p className="text-muted" style={{ marginBottom: 16 }}>Google hesabınızla giriş yaptığınız için hesabınıza standart bir şifre de tanımlayabilirsiniz. E-posta ve belirlediğiniz şifreyle normal giriş de yapabilirsiniz.</p>
@@ -580,9 +830,9 @@ export default function StudentProfile() {
                                     onChange={e => setNewPassword(e.target.value)}
                                 />
                             </div>
-                            <button 
-                                className="btn btn-primary" 
-                                onClick={handleSetPassword} 
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSetPassword}
                                 disabled={settingPassword || newPassword.length < 6}
                                 style={{ marginTop: 16, padding: "12px 32px", fontSize: "15px", width: "100%", maxWidth: 500 }}
                             >
@@ -605,6 +855,26 @@ export default function StudentProfile() {
                                 <button className="btn btn-secondary" onClick={() => setAuthErrorModal(false)}>İptal</button>
                                 <button className="btn btn-primary" onClick={() => { logout(); window.location.href = '/login'; }}>Yeniden Giriş Yap</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Password Success Modal - logout button */}
+                {passwordSuccessModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content card" onClick={e => e.stopPropagation()} style={{ maxWidth: 420, textAlign: "center", padding: "40px 28px" }}>
+                            <div style={{ fontSize: 52, marginBottom: 16 }}>🔒</div>
+                            <h3 style={{ marginBottom: 12, color: "var(--success)" }}>Şifre Başarıyla Belirlendi!</h3>
+                            <p style={{ color: "var(--text-secondary)", marginBottom: 28, fontSize: 15, lineHeight: 1.6 }}>
+                                Şifreniz güvenli şekilde kaydedildi. Güvenliğiniz için lütfen tekrar giriş yapın.
+                            </p>
+                            <button
+                                className="btn btn-primary"
+                                style={{ width: "100%", padding: "14px", fontSize: 16 }}
+                                onClick={async () => { await logout(); window.location.href = '/login'; }}
+                            >
+                                🚪 Çıkış Yap ve Tekrar Giriş Yap
+                            </button>
                         </div>
                     </div>
                 )}

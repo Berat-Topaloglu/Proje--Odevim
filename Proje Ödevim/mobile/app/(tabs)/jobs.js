@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
-import { Text, Searchbar, Card, Avatar, Chip, ActivityIndicator, Surface } from "react-native-paper";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ScrollView } from "react-native";
+import { Text, Searchbar, Card, Avatar, Chip, ActivityIndicator, Surface, IconButton } from "react-native-paper";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useRouter } from "expo-router";
 
-const SECTORS = ["Yazılım", "Tasarım", "Pazarlama", "Mühendislik", "Finans"];
+const SECTORS = ["Yazılım", "Tasarım", "Pazarlama", "Mühendislik", "Finans", "Sağlık", "Eğitim", "Diğer"];
 
 export default function JobsScreen() {
     const [search, setSearch] = useState("");
@@ -15,39 +15,39 @@ export default function JobsScreen() {
     const [selectedSector, setSelectedSector] = useState(null);
     const router = useRouter();
 
-    const fetchJobs = async () => {
-        try {
-            let q = query(
-                collection(db, "jobs"),
-                where("status", "==", "active"),
-                orderBy("createdAt", "desc")
-            );
+    useEffect(() => {
+        setLoading(true);
+        const q = query(
+            collection(db, "jobs"),
+            where("status", "==", "active"),
+            // orderBy removed to avoid index requirement
+        );
 
-            const snap = await getDocs(q);
-            let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const unsub = onSnapshot(q, (snap) => {
+            let jobsData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            // Memory sort: createdAt desc
+            jobsData.sort((a, b) => {
+                const dateA = a.createdAt ? new Date(a.createdAt.toDate()) : 0; // Assuming createdAt is a Firestore Timestamp
+                const dateB = b.createdAt ? new Date(b.createdAt.toDate()) : 0; // Assuming createdAt is a Firestore Timestamp
+                return dateB - dateA;
+            });
 
-            // Fallback for demo if empty
-            if (data.length === 0) {
-                data = DEMO_JOBS;
-            }
-
-            setJobs(data);
-        } catch (err) {
-            console.error("Fetch jobs error:", err);
-            setJobs(DEMO_JOBS);
-        } finally {
+            setJobs(jobsData);
             setLoading(false);
             setRefreshing(false);
-        }
-    };
+        }, (err) => {
+            console.error("Fetch jobs error:", err);
+            setLoading(false);
+            setRefreshing(false);
+        });
 
-    useEffect(() => {
-        fetchJobs();
+        return () => unsubscribe();
     }, []);
 
     const onRefresh = () => {
         setRefreshing(true);
-        fetchJobs();
+        // Snapshot handles updates, but this allows manual force refresh if needed
     };
 
     const filteredJobs = jobs.filter(job => {

@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
+import { 
+    PlusCircle, FileText, MapPin, Target, 
+    ClipboardList, Wrench, Scale, Rocket, X 
+} from "lucide-react";
 import "./PostJob.css";
 
 const SECTORS = ["Yazılım", "Finans", "Sağlık", "Tasarım", "Pazarlama", "Eğitim", "Mühendislik", "Hukuk", "Muhasebe", "Lojistik", "Diğer"];
@@ -25,15 +29,25 @@ export default function PostJob() {
     const { currentUser, userProfile } = useAuth();
     const navigate = useNavigate();
     const [form, setForm] = useState({
-        title: "", description: "", sector: "Yazılım", type: "remote",
+        title: "", position: "", department: "", openings: "1", 
+        description: "", sector: "Yazılım", type: "remote",
         location: "", salary: "", duration: "", deadline: "",
-        skills: [], requirements: ""
+        startDate: "", employmentType: "Stajyer",
+        minEducation: "Ön Lisans", language: "İngilizce (Temel)",
+        experienceLevel: "Stajyer", gender: "Farketmez",
+        disabilityFriendly: false, ageRange: "", 
+        driverLicense: "Gerekli Değil", travelRequirement: "Yok",
+        cvRequired: true, portfolioRequired: false,
+        militaryStatus: false, skills: [], requirements: "", benefits: ""
     });
     const [skillInput, setSkillInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    const handleChange = (e) => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setForm(p => ({ ...p, [name]: type === "checkbox" ? checked : value }));
+    };
 
     const toggleSkill = (skill) => {
         setForm(p => ({
@@ -61,7 +75,6 @@ export default function PostJob() {
         setLoading(true);
         setError("");
         try {
-            // Şirket profilinden logo bilgisini alalım (eğer varsa)
             const companySnap = await getDoc(doc(db, "companies", currentUser.uid));
             const companyData = companySnap.data();
 
@@ -70,7 +83,6 @@ export default function PostJob() {
                 companyId: currentUser.uid,
                 companyName: currentUser.displayName,
                 companyLogo: companyData?.logoUrl || "",
-                skills: form.skills,
                 status: "active",
                 createdAt: new Date().toISOString()
             });
@@ -84,22 +96,40 @@ export default function PostJob() {
 
     return (
         <div className="page-wrapper">
-            <div className="content-wrapper page-enter" style={{ maxWidth: 780 }}>
-                <h1 className="page-heading">➕ Yeni Staj İlanı</h1>
-                <p className="page-sub">İlanınız yayınlandıktan sonra öğrenciler tarafından görüntülenebilir.</p>
+            <div className="content-wrapper page-enter" style={{ maxWidth: 940 }}>
+                <h1 className="page-heading">
+                    <PlusCircle className="header-icon" /> Tam Teşekküllü İlan Oluştur
+                </h1>
+                <p className="page-sub">Görseldeki tüm profesyonel kriterleri kapsayan detaylı ilan formu.</p>
 
                 {error && <div className="alert alert-error mt-16 mb-16">{error}</div>}
 
                 <form onSubmit={handleSubmit}>
-                    {/* Basic Info */}
+                    {/* Temel Bilgiler */}
                     <div className="card mb-24">
-                        <h2 className="section-title2">📝 Temel Bilgiler</h2>
+                        <h2 className="section-title2">
+                            <FileText size={18} className="me-8" /> İlan Bilgileri
+                        </h2>
                         <div className="post-form">
                             <div className="form-group">
                                 <label className="form-label">İlan Başlığı *</label>
-                                <input className="form-input" name="title" value={form.title} onChange={handleChange} placeholder="Örn: Frontend Geliştirici Stajyeri" required />
+                                <input className="form-input" name="title" value={form.title} onChange={handleChange} placeholder="Örn: Kıdemli Frontend Geliştirici Stajyeri" required />
                             </div>
-                            <div className="form-row">
+                            <div className="form-row-3">
+                                <div className="form-group">
+                                    <label className="form-label">Pozisyon / Rol</label>
+                                    <input className="form-input" name="position" value={form.position} onChange={handleChange} placeholder="Örn: React Developer" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Birim / Departman</label>
+                                    <input className="form-input" name="department" value={form.department} onChange={handleChange} placeholder="Örn: Ar-Ge Merkezi" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Alınacak Kişi Sayısı</label>
+                                    <input className="form-input" type="number" name="openings" value={form.openings} onChange={handleChange} min="1" />
+                                </div>
+                            </div>
+                            <div className="form-row-3">
                                 <div className="form-group">
                                     <label className="form-label">Sektör</label>
                                     <select className="form-select" name="sector" value={form.sector} onChange={handleChange}>
@@ -114,49 +144,137 @@ export default function PostJob() {
                                         <option value="onsite">Ofis</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div className="form-row">
                                 <div className="form-group">
-                                    <label className="form-label">Konum</label>
-                                    <input className="form-input" name="location" value={form.location} onChange={handleChange} placeholder="İstanbul / Uzaktan" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Maaş (İsteğe Bağlı)</label>
-                                    <input className="form-input" name="salary" value={form.salary} onChange={handleChange} placeholder="Örn: 5000₺/ay" />
-                                </div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label">Süre (Ay)</label>
-                                    <input className="form-input" name="duration" type="number" value={form.duration} onChange={handleChange} placeholder="3" min={1} max={12} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Son Başvuru Tarihi</label>
-                                    <input className="form-input" name="deadline" type="date" value={form.deadline} onChange={handleChange} />
+                                    <label className="form-label">İstihdam Şekli</label>
+                                    <select className="form-select" name="employmentType" value={form.employmentType} onChange={handleChange}>
+                                        <option>Stajyer</option>
+                                        <option>Tam Zamanlı</option>
+                                        <option>Yarı Zamanlı</option>
+                                        <option>Proje Bazlı</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Description */}
+                    {/* Konum & Şartlar */}
                     <div className="card mb-24">
-                        <h2 className="section-title2">📋 İlan Açıklaması *</h2>
-                        <div className="form-group">
-                            <textarea
-                                className="form-textarea"
-                                name="description"
-                                value={form.description}
-                                onChange={handleChange}
-                                placeholder="Şirketinizi ve staj pozisyonunu tanıtın. Görev tanımı, çalışma koşulları, beklentiler vb."
-                                rows={8}
-                                required
-                            />
+                        <h2 className="section-title2">
+                            <MapPin size={18} className="me-8" /> Konum ve Yan Haklar
+                        </h2>
+                        <div className="post-form">
+                            <div className="form-row-3">
+                                <div className="form-group">
+                                    <label className="form-label">Şehir / Semt</label>
+                                    <input className="form-input" name="location" value={form.location} onChange={handleChange} placeholder="Örn: İstanbul / Beşiktaş" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Maaş / Ücret</label>
+                                    <input className="form-input" name="salary" value={form.salary} onChange={handleChange} placeholder="Örn: 15.000 - 20.000 TL" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Tahmini Başlangıç</label>
+                                    <input className="form-input" type="date" name="startDate" value={form.startDate} onChange={handleChange} />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Sosyal Olanaklar / Yan Haklar</label>
+                                <textarea className="form-input" name="benefits" value={form.benefits} onChange={handleChange} placeholder="Özel sağlık sigortası, Yemek kartı, Eğitim desteği vb." rows={2} />
+                            </div>
                         </div>
                     </div>
 
-                    {/* Skills */}
+                    {/* Aday Kriterleri */}
                     <div className="card mb-24">
-                        <h2 className="section-title2">🛠️ Aranan Beceriler</h2>
+                        <h2 className="section-title2">
+                            <Target size={18} className="me-8" /> Aday Kriterleri
+                        </h2>
+                        <div className="post-form">
+                            <div className="form-row-3">
+                                <div className="form-group">
+                                    <label className="form-label">Minimum Eğitim</label>
+                                    <select className="form-select" name="minEducation" value={form.minEducation} onChange={handleChange}>
+                                        <option>Lise</option>
+                                        <option>Ön Lisans</option>
+                                        <option>Lisans Devam</option>
+                                        <option>Lisans Mezun</option>
+                                        <option>Yüksek Lisans</option>
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Yabancı Dil</label>
+                                    <input className="form-input" name="language" value={form.language} onChange={handleChange} placeholder="Örn: İngilizce (B2)" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Tecrübe</label>
+                                    <select className="form-select" name="experienceLevel" value={form.experienceLevel} onChange={handleChange}>
+                                        <option>Stajyer</option>
+                                        <option>Yeni Mezun (0-2 Yıl)</option>
+                                        <option>Deneyimli (3-5 Yıl)</option>
+                                        <option>Uzman (5+ Yıl)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-row-3">
+                                <div className="form-group">
+                                    <label className="form-label">Cinsiyet</label>
+                                    <select className="form-select" name="gender" value={form.gender} onChange={handleChange}>
+                                        <option>Farketmez</option>
+                                        <option>Erkek</option>
+                                        <option>Kadın</option>
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Yaş Aralığı</label>
+                                    <input className="form-input" name="ageRange" value={form.ageRange} onChange={handleChange} placeholder="Örn: 20 - 28" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Ehliyet Sınıfı</label>
+                                    <input className="form-input" name="driverLicense" value={form.driverLicense} onChange={handleChange} placeholder="Örn: B Sınıfı" />
+                                </div>
+                            </div>
+                            <div className="form-row-3">
+                                <div className="form-group">
+                                    <label className="form-label">Seyahat Durumu</label>
+                                    <select className="form-select" name="travelRequirement" value={form.travelRequirement} onChange={handleChange}>
+                                        <option>Seyahat Engeli Yok</option>
+                                        <option>Seyahat Edebilir</option>
+                                        <option>Seyahat Gerekmiyor</option>
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Son Başvuru</label>
+                                    <input className="form-input" type="date" name="deadline" value={form.deadline} onChange={handleChange} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Süre</label>
+                                    <input className="form-input" name="duration" value={form.duration} onChange={handleChange} placeholder="3 Ay / Proje Boyu" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Detaylı Açıklama */}
+                    <div className="card mb-24">
+                        <h2 className="section-title2">
+                            <ClipboardList size={18} className="me-8" /> İş Tanımı ve Detaylar *
+                        </h2>
+                        <textarea
+                            className="form-textarea"
+                            name="description"
+                            value={form.description}
+                            onChange={handleChange}
+                            placeholder="Sorumluluklar, beklenen çıktılar ve şirket kültürü hakkında bilgi verin..."
+                            rows={8}
+                            required
+                        />
+                    </div>
+
+                    {/* Yetenekler */}
+                    <div className="card mb-24">
+                        <h2 className="section-title2">
+                            <Wrench size={18} className="me-8" /> Teknik Beceriler
+                        </h2>
                         <div className="skills-grid-post">
                             {(SKILLS_BY_SECTOR[form.sector] || SKILLS_BY_SECTOR["Diğer"]).map(s => (
                                 <button key={s} type="button"
@@ -189,15 +307,46 @@ export default function PostJob() {
                         )}
                     </div>
 
+                    {/* Seçenekler */}
+                    <div className="card mb-24">
+                        <h2 className="section-title2">
+                            <Scale size={18} className="me-8" /> Başvuru Seçenekleri
+                        </h2>
+                        <div className="options-grid">
+                            <label className="check-option">
+                                <input type="checkbox" name="cvRequired" checked={form.cvRequired} onChange={handleChange} />
+                                <span>📄 Özgeçmiş (CV) Zorunlu</span>
+                            </label>
+                            <label className="check-option">
+                                <input type="checkbox" name="portfolioRequired" checked={form.portfolioRequired} onChange={handleChange} />
+                                <span>🎨 Portfolyo / Repo Linki Zorunlu</span>
+                            </label>
+                            <label className="check-option">
+                                <input type="checkbox" name="disabilityFriendly" checked={form.disabilityFriendly} onChange={handleChange} />
+                                <span>♿ Engelliye Uygun / Kontenjan</span>
+                            </label>
+                            <label className="check-option">
+                                <input type="checkbox" name="militaryStatus" checked={form.militaryStatus} onChange={handleChange} />
+                                <span>🪖 Askerlik Tecilli / Yapıldı Sorgula</span>
+                            </label>
+                        </div>
+                    </div>
+
                     {/* Actions */}
-                    <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-                        <button type="button" className="btn btn-secondary" onClick={() => navigate("/company/jobs")}>İptal</button>
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
-                            {loading ? "Yayınlanıyor..." : "🚀 İlanı Yayınla"}
+                    <div className="form-actions-fixed">
+                        <button type="button" className="btn btn-secondary" onClick={() => navigate("/company/jobs")}>
+                            <X size={18} className="me-8" /> İptal
+                        </button>
+                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ minWidth: 220 }}>
+                            {loading ? "📦 Sistem Hazırlanıyor..." : (
+                                <>
+                                    <Rocket size={18} className="me-8" /> İlanı Profesyonelce Yayınla
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     );
-}
+};

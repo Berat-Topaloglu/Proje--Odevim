@@ -33,7 +33,9 @@ export default function ForgotPassword() {
 
             <div className="auth-container page-enter">
                 <div className="auth-logo">
-                    <div className="logo-icon">S</div>
+                    <div className="logo-icon">
+                        <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
+                    </div>
                     <span className="logo-text">Staj<span>Hub</span></span>
                 </div>
 

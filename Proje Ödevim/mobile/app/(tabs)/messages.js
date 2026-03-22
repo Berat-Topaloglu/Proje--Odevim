@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, FlatList, TouchableOpacity } from "react-native";
-import { Text, List, Avatar, Divider, ActivityIndicator, Surface } from "react-native-paper";
+import { Text, List, Avatar, Divider, ActivityIndicator, Surface, IconButton } from "react-native-paper";
 import { useAuth } from "../../src/context/AuthContext";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, limit } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useRouter } from "expo-router";
 
@@ -18,7 +17,7 @@ export default function MessagesScreen() {
 
         const q = query(
             collection(db, "chats"),
-            where("participants", "arrayContains", currentUser.uid),
+            where("participants", "array-contains", currentUser.uid),
             limit(50)
         );
 
