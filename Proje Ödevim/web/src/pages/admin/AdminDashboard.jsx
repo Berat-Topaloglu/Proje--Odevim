@@ -21,7 +21,8 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { FORBIDDEN_WORDS } from "../../utils/wordFilter";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
-import { Crown, Eye, Trash2, Edit3, CheckCircle, XCircle, Shield, RotateCcw, MessageSquare, AlertTriangle, Settings, Users, ClipboardList, ShieldAlert, Cpu, TextAlignCenter, AlignJustify, AlignHorizontalJustifyCenter } from "lucide-react";
+import { Crown, Eye, Trash2, Edit3, CheckCircle, XCircle, Shield, RotateCcw, MessageSquare, AlertTriangle, Settings, Users, ClipboardList, ShieldAlert, Cpu, TextAlignCenter, AlignJustify, AlignHorizontalJustifyCenter, XOctagon, ShieldCheck } from "lucide-react";
+import emailjs from '@emailjs/browser';
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
@@ -45,6 +46,7 @@ export default function AdminDashboard() {
     const [reviews, setReviews] = useState([]);
     const [chats, setChats] = useState([]);
     const [reports, setReports] = useState([]);
+    const [restorationRequests, setRestorationRequests] = useState([]);
     const [forbidden, setForbidden] = useState({ words: [], patterns: [] });
 
     // UI States
@@ -149,19 +151,75 @@ export default function AdminDashboard() {
         return () => unsubscribeReports();
     }, [isAdmin]);
 
-    const handleDeleteUser = async (uid) => {
-        const confirmed = await showConfirm("Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.", "Kullanıcı Silme");
+    const handleToggleDisable = async (uid, currentStatus) => {
+        const action = currentStatus ? "aktif etmek" : "devre dışı bırakmak";
+        const confirmed = await showConfirm(`Bu kullanıcıyı ${action} istediğinize emin misiniz?`, "Hesap Durumu");
+        if (!confirmed) return;
+        
+        try {
+            await updateDoc(doc(db, "users", uid), {
+                disabled: !currentStatus,
+                disabledAt: !currentStatus ? serverTimestamp() : null
+            });
+            showNotification(`Kullanıcı başarıyla ${currentStatus ? 'aktif edildi' : 'donduruldu'}.`, "success", "Siber Kilit");
+            if (selectedDetail && selectedDetail.id === uid) {
+                setSelectedDetail(prev => ({ ...prev, disabled: !currentStatus }));
+            }
+            fetchData();
+        } catch (err) { showNotification("Hata: " + err.message, "error", "Hata"); }
+    };
+
+    const handleRestoreApproval = async (reqId, email) => {
+        const confirmed = await showConfirm("Bu kullanıcının bütün eski verilerini geri yüklemeyi onaylıyor musunuz?", "Geri Yükleme Onayı");
+        if (!confirmed) return;
+        
+        try {
+            // 1. Get archived data
+            const archiveSnap = await getDoc(doc(db, "deletedAccounts", email));
+            if (!archiveSnap.exists()) throw new Error("Arşiv verisi bulunamadı.");
+            
+            const archiveData = archiveSnap.data();
+            const requestSnap = await getDoc(doc(db, "restorationRequests", reqId));
+            const newUid = requestSnap.data().newUid;
+
+            // 2. Restore to new UID (Revive Identity & Remove Cyber-Fetter)
+            await setDoc(doc(db, "users", newUid), {
+                ...archiveData.userData,
+                status: "active", // Reactivate!
+                displayName: archiveData.userData.displayName, // Restore original name
+                createdAt: serverTimestamp(),
+                restoredAt: serverTimestamp()
+            });
+
+            if (archiveData.roleData?.student) {
+                await setDoc(doc(db, "students", newUid), archiveData.roleData.student);
+            }
+            if (archiveData.roleData?.company) {
+                await setDoc(doc(db, "companies", newUid), archiveData.roleData.company);
+            }
+
+            // 3. Cleanup
+            await deleteDoc(doc(db, "deletedAccounts", email));
+            await deleteDoc(doc(db, "restorationRequests", reqId));
+
+            // 4. Notify user via EmailJS
+            await emailjs.send("service_wupm5uc", "template_kvsc4vm", {
+                to_email: email,
+                to_name: archiveData.userData.displayName || "Kullanıcı",
+                message: "Müjde! StajHub hesabınız ve tüm eski verileriniz yönetim onayıyla başarıyla geri yüklendi. Artık platforma giriş yapabilirsiniz."
+            }, "NPz_h8os1UzhSm7Q2");
+
+            showNotification("Kullanıcı tüm profesyonel geçmişiyle siber uzaya geri döndürüldü.", "success", "Siber Diriliş");
+            fetchData();
+        } catch (err) { showNotification("Hata: " + err.message, "error", "Hata"); }
+    };
+
+    const handleRestoreReject = async (reqId) => {
+        const confirmed = await showConfirm("Geri yükleme talebini reddetmek istediğinize emin misiniz? (Bu işlem veriyi silmez, sadece talebi siler)", "Talebi Reddet");
         if (!confirmed) return;
         try {
-            await deleteDoc(doc(db, "users", uid));
-            await deleteDoc(doc(db, "students", uid));
-            await deleteDoc(doc(db, "companies", uid));
-            setUsers(users.filter(u => u.id !== uid));
-            showNotification("Kullanıcı başarıyla silindi.", "success", "Siber İmha");
-            if (selectedDetail && (selectedDetail.id === uid || selectedDetail.targetId === uid)) {
-                setSelectedDetail(null);
-            }
-            setTimeout(() => fetchData(), 1500);
+            await deleteDoc(doc(db, "restorationRequests", reqId));
+            showNotification("Geri yükleme talebi reddedildi.", "info", "İşlem Tamam");
         } catch (err) { showNotification("Hata: " + err.message, "error", "Hata"); }
     };
 
@@ -169,13 +227,28 @@ export default function AdminDashboard() {
         const confirmed = await showConfirm("İlanı silmek istiyor musunuz? Bu ilana yapılan TÜM başvurular da silinecektir.", "İşlem Kritik");
         if (!confirmed) return;
         try {
-            const q = query(collection(db, "applications"), where("jobId", "==", jobId));
-            const snap = await getDocs(q);
-            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
-            await Promise.all(deletePromises);
+            // 1. İlana ait tüm başvuruları temizle
+            const appQ = query(collection(db, "applications"), where("jobId", "==", jobId));
+            const appSnap = await getDocs(appQ);
+            await Promise.all(appSnap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id))));
+
+            // 2. İlana ait tüm sohbetleri ve mesajları temizle
+            const chatQ = query(collection(db, "chats"), where("jobId", "==", jobId));
+            const chatSnap = await getDocs(chatQ);
+            
+            await Promise.all(chatSnap.docs.map(async (chatDoc) => {
+                const chatId = chatDoc.id;
+                const msgQ = query(collection(db, "chats", chatId, "messages"));
+                const msgSnap = await getDocs(msgQ);
+                await Promise.all(msgSnap.docs.map(m => deleteDoc(doc(db, "chats", chatId, "messages", m.id))));
+                await deleteDoc(doc(db, "chats", chatId));
+            }));
+
+            // 3. İlanın kendisini temizle
             await deleteDoc(doc(db, "jobs", jobId));
+            
             setJobs(jobs.filter(j => j.id !== jobId));
-            showNotification(`${snap.size} başvuru ile birlikte ilan imha edildi.`, "success", "Operasyon Tamam");
+            showNotification(`${appSnap.size} başvuru ve ilgili tüm mesajlaşmalarla birlikte ilan imha edildi.`, "success", "Operasyon Tamam");
             setTimeout(() => fetchData(), 1500);
         } catch (err) { showNotification("İnfaz Hatası: " + err.message, "error", "Hata"); }
     };
@@ -219,18 +292,41 @@ export default function AdminDashboard() {
     const handleAddWord = async () => {
         if (!newWord.trim()) return;
         const word = newWord.trim().toLowerCase();
+        
         if (forbidden.words.includes(word)) {
             showNotification("Bu kelime zaten listede.", "warning", "Uyarı");
             return;
         }
+
         setSaving(true);
         try {
-            const updatedWords = [...forbidden.words, word];
-            await setDoc(doc(db, "settings", "forbiddenContent"), { ...forbidden, words: updatedWords });
-            setForbidden({ ...forbidden, words: updatedWords });
+            const languages = ["en", "de", "fr", "es"];
+            const translations = new Set([word]);
+
+            // Translation Phase
+            showNotification("Diğer dillere çevriliyor...", "info", "Siber Savunma");
+            
+            await Promise.all(languages.map(async (lang) => {
+                try {
+                    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=tr|${lang}`);
+                    const data = await res.json();
+                    if (data.responseData?.translatedText) {
+                        const translated = data.responseData.translatedText.toLowerCase().trim();
+                        if (translated && translated !== word) {
+                            translations.add(translated);
+                        }
+                    }
+                } catch (e) { console.warn(`Translation failed for ${lang}`, e); }
+            }));
+
+            const finalWords = [...new Set([...forbidden.words, ...Array.from(translations)])];
+            await setDoc(doc(db, "settings", "forbiddenContent"), { ...forbidden, words: finalWords });
+            setForbidden({ ...forbidden, words: finalWords });
             setNewWord("");
-            showNotification("Kelime başarıyla eklendi.", "success", "Başarılı");
-        } catch (err) { showNotification("Hata: " + err.message, "error", "Hata"); }
+            showNotification(`${translations.size} varyasyonu ile kelime savunma hattına eklendi.`, "success", "Başarılı");
+        } catch (err) { 
+            showNotification("Hata: " + err.message, "error", "Hata"); 
+        }
         setSaving(false);
     };
 
@@ -421,6 +517,26 @@ export default function AdminDashboard() {
 
                     {activeTab === "overview" && (
                         <div className="overview-grid">
+                            {restorationRequests.length > 0 && (
+                                <div className="restoration-card glass warning-border">
+                                    <h3 className="section-title"><ShieldAlert size={18} /> Geri Yükleme Talepleri ({restorationRequests.length})</h3>
+                                    <div className="restoration-list">
+                                        {restorationRequests.map(req => (
+                                            <div key={req.id} className="restoration-item">
+                                                <div className="req-info">
+                                                    <strong>{req.email}</strong>
+                                                    <span>Yeni Kayıt: {req.displayName}</span>
+                                                </div>
+                                                <div className="req-actions">
+                                                    <button className="btn-small success" onClick={() => handleRestoreApproval(req.id, req.email)}>ONAYLA</button>
+                                                    <button className="btn-small danger" onClick={() => handleRestoreReject(req.id)}>REDDET</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="table-header-box">
                                 <h2 className="section-title">En Son İlanlar</h2>
                             </div>
@@ -434,13 +550,29 @@ export default function AdminDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {jobs.slice(0, 5).map(job => (
-                                            <tr key={job.id}>
-                                                <td className="font-bold">{job.title}</td>
-                                                <td>{job.companyName}</td>
-                                                <td><Link to={`/jobs/${job.id}`} className="btn-icon-styled"><Eye size={14} /></Link></td>
+                                        {jobs.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="3" className="empty-msg-td">
+                                                    <div className="empty-state-mini">
+                                                        <ClipboardList size={24} opacity={0.3} />
+                                                        <p>Aktif ilan bulunamadı.</p>
+                                                    </div>
+                                                </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            jobs.slice(0, 5).map(job => (
+                                                <tr key={job.id}>
+                                                    <td className="font-bold">{job.title}</td>
+                                                    <td>{job.companyName}</td>
+                                                    <td className="text-right">
+                                                        <div className="action-button-group">
+                                                            <Link to={`/jobs/${job.id}`} className="btn-icon-styled"><Eye size={14} /></Link>
+                                                            <button className="btn-icon-styled danger" onClick={() => handleDeleteJob(job.id)}><Trash2 size={14} /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -463,41 +595,65 @@ export default function AdminDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {users.filter(u =>
-                                            u.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                            u.email?.toLowerCase().includes(searchQuery.toLowerCase())
-                                        ).map(user => (
-                                            <tr key={user.id}>
-                                                <td>
-                                                    <div className="user-profile-cell">
-                                                        <div className="avatar-admin">
-                                                            {user.photoURL ? <img src={user.photoURL} alt="" /> : user.displayName?.charAt(0)}
-                                                        </div>
-                                                        <div className="user-meta-name">
-                                                            <span className="name-bold">{user.displayName}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="text-muted">{user.email}</td>
-                                                <td><span className={`role-badge ${user.type}`}>{user.type === 'student' ? 'Öğrenci' : 'Şirket'}</span></td>
-                                                <td className="text-right">
-                                                    <div className="action-button-group">
-                                                        <button className="btn-icon-styled" onClick={async () => {
-                                                            setLoading(true);
-                                                            const roleDoc = await getDoc(doc(db, user.type === "student" ? "students" : "companies", user.id));
-                                                            setSelectedDetail({ ...user, profileData: roleDoc.exists() ? roleDoc.data() : {} });
-                                                            setLoading(false);
-                                                        }}><Eye size={14} /></button>
-                                                        {user.type === "company" && (
-                                                            <button className={`btn-icon-styled ${user.profileData?.verified ? "active" : ""}`} onClick={() => handleToggleVerify(user.id, user.profileData?.verified)}>
-                                                                <Shield size={14} />
-                                                            </button>
-                                                        )}
-                                                        <button className="btn-icon-styled danger" onClick={() => handleDeleteUser(user.id)}><Trash2 size={14} /></button>
+                                        {users.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="4" className="text-center empty-cell">
+                                                    <div className="admin-empty-state">
+                                                        <p>Sistemde henüz kayıtlı kullanıcı bulunmuyor.</p>
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            (() => {
+                                                const queryStr = searchQuery.toLowerCase();
+                                                const filtered = users.filter(u =>
+                                                    u.displayName?.toLowerCase().includes(queryStr) ||
+                                                    u.email?.toLowerCase().includes(queryStr)
+                                                );
+                                                if (filtered.length === 0) return (
+                                                    <tr>
+                                                        <td colSpan="4" className="text-center empty-cell">
+                                                            <div className="admin-empty-state">
+                                                                <p>Arama kriterlerinize uygun kullanıcı bulunamadı.</p>
+                                                                <button className="btn-mini-clear" onClick={() => setSearchQuery("")}>Aramayı Temizle</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                                return filtered.map(user => (
+                                                    <tr key={user.id}>
+                                                        <td>
+                                                            <div className="user-profile-cell">
+                                                                <div className="avatar-admin">
+                                                                    {user.photoURL ? <img src={user.photoURL} alt="" /> : user.displayName?.charAt(0)}
+                                                                </div>
+                                                                <div className="user-meta-name">
+                                                                    <span className="name-bold">{user.displayName}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-muted">{user.email}</td>
+                                                        <td><span className={`role-badge ${user.type}`}>{user.type === 'student' ? 'Öğrenci' : 'Şirket'}</span> {user.disabled && <span className="role-badge disabled">DONDURULDU</span>}</td>
+                                                        <td className="text-right">
+                                                            <div className="action-button-group">
+                                                                <button className="btn-icon-styled" onClick={async () => {
+                                                                    setLoading(true);
+                                                                    const roleDoc = await getDoc(doc(db, user.type === "student" ? "students" : "companies", user.id));
+                                                                    setSelectedDetail({ ...user, profileData: roleDoc.exists() ? roleDoc.data() : {} });
+                                                                    setLoading(false);
+                                                                }}><Eye size={14} /></button>
+                                                                {user.type === "company" && (
+                                                                    <button className={`btn-icon-styled ${user.profileData?.verified ? "active" : ""}`} onClick={() => handleToggleVerify(user.id, user.profileData?.verified)}>
+                                                                        <Shield size={14} />
+                                                                    </button>
+                                                                )}
+                                                                <button className="btn-icon-styled danger" onClick={() => handleDeleteUser(user.id)}><Trash2 size={14} /></button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -505,7 +661,7 @@ export default function AdminDashboard() {
                     )}
 
                     {activeTab === "jobs" && (
-                        <div className="jobs-section">
+                        <div className="tab-section-content">
                             <h2 className="section-title">Görev Havuzu</h2>
                             <div className="pro-table-wrapper">
                                 <table className="pro-table">
@@ -517,18 +673,41 @@ export default function AdminDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {jobs.filter(j => j.title?.toLowerCase().includes(searchQuery.toLowerCase())).map(job => (
-                                            <tr key={job.id}>
-                                                <td className="name-bold">{job.title}</td>
-                                                <td className="text-muted">{job.companyName}</td>
-                                                <td className="text-right">
-                                                    <div className="action-button-group">
-                                                        <Link to={`/jobs/${job.id}`} className="btn-icon-styled"><Eye size={14} /></Link>
-                                                        <button className="btn-icon-styled danger" onClick={() => handleDeleteJob(job.id)}><Trash2 size={14} /></button>
+                                        {jobs.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="3" className="text-center empty-cell">
+                                                    <div className="admin-empty-state">
+                                                        <p>Sistemde yayınlanmış ilan bulunmuyor.</p>
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            (() => {
+                                                const filtered = jobs.filter(j => j.title?.toLowerCase().includes(searchQuery.toLowerCase()));
+                                                if (filtered.length === 0) return (
+                                                    <tr>
+                                                        <td colSpan="3" className="text-center empty-cell">
+                                                            <div className="admin-empty-state">
+                                                                <p>Arama kriterlerinize uygun ilan bulunamadı.</p>
+                                                                <button className="btn-mini-clear" onClick={() => setSearchQuery("")}>Aramayı Temizle</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                                return filtered.map(job => (
+                                                    <tr key={job.id}>
+                                                        <td className="name-bold">{job.title}</td>
+                                                        <td className="text-muted">{job.companyName}</td>
+                                                        <td className="text-right">
+                                                            <div className="action-button-group">
+                                                                <Link to={`/jobs/${job.id}`} className="btn-icon-styled"><Eye size={14} /></Link>
+                                                                <button className="btn-icon-styled danger" onClick={() => handleDeleteJob(job.id)}><Trash2 size={14} /></button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -536,27 +715,63 @@ export default function AdminDashboard() {
                     )}
 
                     {activeTab === "chats" && (
-                        <div className="chats-section">
+                        <div className="tab-section-content">
                             <h2 className="section-title">🛰️ Telsiz Gözlem</h2>
                             <div className="pro-table-wrapper">
                                 <table className="pro-table">
                                     <thead>
                                         <tr>
-                                            <th>Katılımcı IDs</th>
+                                            <th>Diyalog Detayı</th>
                                             <th>Son Sinyal</th>
                                             <th className="text-right">İşlem</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {chats.map(chat => (
-                                            <tr key={chat.id}>
-                                                <td className="font-mono text-xs">{chat.participants?.join(", ").slice(0, 30)}...</td>
-                                                <td className="text-muted italic">"{chat.lastMessage?.slice(0, 20)}..."</td>
-                                                <td className="text-right">
-                                                    <button className="btn-icon-styled" onClick={() => handleViewChat(chat)}><MessageSquare size={14} /> Dinle</button>
+                                        {chats.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="3" className="text-center empty-cell">
+                                                    <div className="admin-empty-state">
+                                                        <p>Henüz aktif bir yazışma bulunmuyor.</p>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            (() => {
+                                                const queryStr = searchQuery.toLowerCase();
+                                                const filtered = chats.filter(chat => 
+                                                    chat.jobTitle?.toLowerCase().includes(queryStr) ||
+                                                    chat.lastMessage?.toLowerCase().includes(queryStr) ||
+                                                    chat.participantDetails?.some(p => p.name?.toLowerCase().includes(queryStr)) ||
+                                                    chat.participants?.some(pId => pId.toLowerCase().includes(queryStr))
+                                                );
+                                                if (filtered.length === 0) return (
+                                                    <tr>
+                                                        <td colSpan="3" className="text-center empty-cell">
+                                                            <div className="admin-empty-state">
+                                                                <p>Filtreye uygun mesaj kaydı bulunamadı.</p>
+                                                                <button className="btn-mini-clear" onClick={() => setSearchQuery("")}>Aramayı Temizle</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                                return filtered.map(chat => (
+                                                    <tr key={chat.id}>
+                                                        <td>
+                                                            <div className="chat-participants-cell">
+                                                                <span className="job-tag-mini">{chat.jobTitle || "Genel"}</span>
+                                                                <div className="participant-names">
+                                                                    {chat.participantDetails?.map(p => p.name).join(" vs ")}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-muted italic">"{chat.lastMessage?.slice(0, 30)}..."</td>
+                                                        <td className="text-right">
+                                                            <button className="btn-icon-styled" onClick={() => handleViewChat(chat)}><MessageSquare size={14} /> Dinle</button>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -641,7 +856,7 @@ export default function AdminDashboard() {
                             <h2 className="section-title"><Cpu size={24} /> Çekirdek Kontrol</h2>
                             <div className="lock-box glass">
                                 <div className="lock-info">
-                                    <h3>Bakım Protokolü (Omega Lock)</h3>
+                                    <h3>Bakım Modu</h3>
                                     <p>Tüm sistem erişimini sınırlandırır.</p>
                                 </div>
                                 <button className={`btn-omega ${systemSettings.maintenance ? 'active' : ''}`} onClick={async () => {
@@ -733,9 +948,9 @@ export default function AdminDashboard() {
                                                 <div className="tile-icon"><RotateCcw size={20} /></div>
                                                 <span>Şifre Sıfırla</span>
                                             </button>
-                                            <button className="tile-btn yellow" onClick={() => handleSendWarning(selectedDetail.id)}>
-                                                <div className="tile-icon"><AlertTriangle size={20} /></div>
-                                                <span>Uyarı Ver</span>
+                                            <button className={`tile-btn ${selectedDetail.disabled ? 'green' : 'yellow'}`} onClick={() => handleToggleDisable(selectedDetail.id, selectedDetail.disabled)}>
+                                                <div className="tile-icon">{selectedDetail.disabled ? <ShieldCheck size={20} /> : <XOctagon size={20} />}</div>
+                                                <span>{selectedDetail.disabled ? "Aktif Et" : "Dondur"}</span>
                                             </button>
                                             <button className="tile-btn red" onClick={() => handleDeleteUser(selectedDetail.id)}>
                                                 <div className="tile-icon"><Trash2 size={20} /></div>

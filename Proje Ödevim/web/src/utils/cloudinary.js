@@ -32,16 +32,7 @@ export const uploadToCloudinary = async (file) => {
         }
 
         const data = await response.json();
-        let url = data.secure_url;
-
-        // PDF görüntüleme sorununu çözmek için URL'ye müdahale ediyoruz:
-        // 'fl_attachment' bayrağını kaldırıp tarayıcıda açılmasını sağlıyoruz.
-        if (isPDF) {
-            // Cloudinary URL'lerinde /upload/ kısmından sonra fl_inline veya fl_attachment:false eklenebilir.
-            url = url.replace("/upload/", "/upload/fl_attachment:false/");
-        }
-
-        return url;
+        return data.secure_url;
     } catch (err) {
         console.error("Cloudinary upload error:", err);
         throw err;

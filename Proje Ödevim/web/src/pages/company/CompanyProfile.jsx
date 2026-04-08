@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { uploadToCloudinary } from "../../utils/cloudinary";
 import { db } from "../../firebase/config";
@@ -77,20 +77,45 @@ export default function CompanyProfile() {
 
     const handleSave = async () => {
         setSaving(true);
+        setError("");
+        setSuccess("");
         try {
+            // 1. Update Firebase Auth Profile & Users Collection
             if (profile.displayName !== currentUser.displayName) {
                 await updateDisplayName(profile.displayName);
+            } else {
+                // Sadece users tablosunu güncel tut
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    displayName: profile.displayName,
+                });
             }
 
-            const { displayName, ...roleData } = profile;
-            // Sync companyName with displayName for the Firestore document as well
-            roleData.companyName = profile.displayName; 
-            await setDoc(doc(db, "companies", currentUser.uid), roleData, { merge: true });
+            // Clean profile to remove undefined values
+            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
+                if (value !== undefined) {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
+
+            // 2. Update Company Specific Profile
+            const updatedProfile = {
+                ...cleanProfile,
+                companyName: cleanProfile.displayName || cleanProfile.companyName, // Senkronizasyon
+                updatedAt: serverTimestamp()
+            };
+
+            await setDoc(doc(db, "companies", currentUser.uid), updatedProfile, { merge: true });
             
+            // 3. Sync local state
+            setProfile(updatedProfile);
             setEditMode(false);
             setSuccess("Şirket profili güncellendi! ✅");
             setTimeout(() => setSuccess(""), 3000);
-        } catch (err) { console.error("Hata:", err); }
+        } catch (err) { 
+            console.error("Şirket profil kayıt hatası:", err); 
+            setError("Profil kaydedilirken bir hata oluştu.");
+        }
         setSaving(false);
     };
 

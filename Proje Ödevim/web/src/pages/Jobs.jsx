@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { Search, RotateCcw, Briefcase } from "lucide-react";
 import "./Jobs.css";
 
 const SECTORS = ["Tüm Sektörler", "Yazılım", "Finans", "Sağlık", "Tasarım", "Pazarlama", "Eğitim", "Mühendislik", "Hukuk", "Muhasebe", "Lojistik", "Diğer"];
@@ -167,11 +168,32 @@ export default function Jobs() {
                             </div>
                         ))}
                     </div>
+                ) : jobs.length === 0 ? (
+                    <div className="jobs-empty-simple">
+                        <div className="simple-icon-box"><Briefcase size={32} /></div>
+                        <p>Henüz yayınlanmış bir ilan bulunmuyor.</p>
+                    </div>
                 ) : filtered.length === 0 ? (
                     <div className="jobs-empty">
-                        <div className="empty-icon">🔍</div>
-                        <h3>İlan bulunamadı</h3>
-                        <p>Farklı filtre seçeneklerini deneyin</p>
+                        <div className="empty-icon-wrapper">
+                            <div className="empty-glow" />
+                            <Search size={48} />
+                        </div>
+                        <h3 className="empty-title">Maceraya Başlamaya Hazır Mısın?</h3>
+                        <p className="empty-description">
+                            Görünüşe göre aradığın kriterlerde aktif bir ilan henüz yok. <br/>
+                            Farklı anahtar kelimeler kullanarak şansını tekrar deneyebilirsin!
+                        </p>
+                        <button className="btn-glass-action" onClick={() => {
+                            setSearch("");
+                            setSector("Tüm Sektörler");
+                            setType("Tüm Türler");
+                            setExpLevel("Tüm Seviyeler");
+                            setEmpType("Tüm Şekiller");
+                            setEduLevel("Tüm Eğitimler");
+                        }}>
+                             <RotateCcw size={16} /> <span>Filtreleri Temizle</span>
+                        </button>
                     </div>
                 ) : (
                     <div className="jobs-list">

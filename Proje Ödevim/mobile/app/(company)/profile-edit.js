@@ -36,15 +36,30 @@ export default function CompanyProfileEdit() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateDoc(doc(db, "companies", currentUser.uid), profile);
+            // Clean profile to remove undefined values
+            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
+                if (value !== undefined) acc[key] = value;
+                return acc;
+            }, {});
+
+            const updateData = {
+                ...cleanProfile,
+                companyName: cleanProfile.companyName || currentUser.displayName,
+                updatedAt: new Date().toISOString()
+            };
+
+            await updateDoc(doc(db, "companies", currentUser.uid), updateData);
             
             // Sync companyName with user document displayName
-            await updateDoc(doc(db, "users", currentUser.uid), { displayName: profile.companyName });
+            await updateDoc(doc(db, "users", currentUser.uid), { 
+                displayName: updateData.companyName,
+                updatedAt: new Date().toISOString()
+            });
             
             // Sync with Firebase Auth currentUser
-            if (profile.companyName !== currentUser.displayName) {
+            if (updateData.companyName !== currentUser.displayName) {
                 const { updateProfile } = require("firebase/auth");
-                await updateProfile(currentUser, { displayName: profile.companyName });
+                await updateProfile(currentUser, { displayName: updateData.companyName });
             }
 
             Alert.alert("Başarılı", "Şirket profili güncellendi.");

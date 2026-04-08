@@ -3,11 +3,11 @@ import { View, StyleSheet, ScrollView, Alert } from "react-native";
 import { Text, TextInput, Button, Surface, IconButton, ActivityIndicator, Chip } from "react-native-paper";
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from 'expo-file-system';
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-import { uploadToCloudinary } from "../../src/utils/cloudinary";
-
+import { uploadToCloudinary } from "../../src/utils/cloudinary"; // Required for photos
 const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "SQL", "Git", "TypeScript", "UI/UX"];
 
 export default function StudentProfileEdit() {
@@ -40,9 +40,20 @@ export default function StudentProfileEdit() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Update both student doc and user profile in context/users collection
-            await updateDoc(doc(db, "students", currentUser.uid), profile);
+            // Clean profile object (remove undefined values)
+            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
+                if (value !== undefined) acc[key] = value;
+                return acc;
+            }, {});
+
+            const updateData = {
+                ...cleanProfile,
+                updatedAt: new Date().toISOString()
+            };
+
+            await updateDoc(doc(db, "students", currentUser.uid), updateData);
             await updateProfileData(currentUser.displayName, profile.photoUrl, profile.phoneNumber || "");
+
             
             Alert.alert("Başarılı", "Profiliniz güncellendi.");
             router.back();
@@ -89,11 +100,16 @@ export default function StudentProfileEdit() {
             if (!result.canceled) {
                 setUploadingCV(true);
                 const file = result.assets[0];
-                const url = await uploadToCloudinary(file.uri, file.name, file.mimeType);
+                
+                // Construct Base64 explicitly to match Web exactly
+                const base64Content = await FileSystem.readAsStringAsync(file.uri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                const base64Url = `data:${file.mimeType || 'application/pdf'};base64,${base64Content}`;
 
-                setProfile(p => ({ ...p, cvUrl: url }));
-                await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: url });
-                Alert.alert("Başarılı", "CV'niz yüklendi.");
+                setProfile(p => ({ ...p, cvUrl: base64Url }));
+                await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: base64Url });
+                Alert.alert("Başarılı", "CV'niz başarıyla yüklendi.");
             }
         } catch (err) {
             console.error("CV Upload error:", err);

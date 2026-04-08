@@ -68,18 +68,28 @@ export default function CompanyJobs() {
         const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz? İlanla birlikte TÜM başvurular da yok edilecektir.", "Kritik İşlem");
         if (!confirmed) return;
         try {
-            // Cascade Delete: Applications
-            const q = query(collection(db, "applications"), where("jobId", "==", jobId));
-            const snap = await getDocs(q);
-            
-            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
-            await Promise.all(deletePromises);
+            // 1. İlana ait tüm başvuruları temizle
+            const appQ = query(collection(db, "applications"), where("jobId", "==", jobId));
+            const appSnap = await getDocs(appQ);
+            await Promise.all(appSnap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id))));
 
-            // Delete the job
+            // 2. İlana ait tüm sohbetleri ve mesajları temizle
+            const chatQ = query(collection(db, "chats"), where("jobId", "==", jobId));
+            const chatSnap = await getDocs(chatQ);
+            
+            await Promise.all(chatSnap.docs.map(async (chatDoc) => {
+                const chatId = chatDoc.id;
+                const msgQ = query(collection(db, "chats", chatId, "messages"));
+                const msgSnap = await getDocs(msgQ);
+                await Promise.all(msgSnap.docs.map(m => deleteDoc(doc(db, "chats", chatId, "messages", m.id))));
+                await deleteDoc(doc(db, "chats", chatId));
+            }));
+
+            // 3. İlanı sil
             await deleteDoc(doc(db, "jobs", jobId));
             
             setJobs(jobs.filter(j => j.id !== jobId));
-            showNotification(`${snap.size} başvuru temizlendi ve ilan silindi.`, "success", "Başarılı");
+            showNotification(`${appSnap.size} başvuru ve ilgili tüm diyaloglar temizlendi.`, "success", "Başarılı");
         } catch (err) {
             console.error("İlan silinemedi:", err);
             showNotification("İlan imha edilirken bir hata oluştu.", "error", "Hata");

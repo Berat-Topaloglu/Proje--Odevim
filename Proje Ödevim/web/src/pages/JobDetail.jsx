@@ -5,6 +5,7 @@ import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { uploadToCloudinary } from "../utils/cloudinary";
+import { getSafeCvUrl } from "../utils/file_utils";
 import { 
     Briefcase, Users, GraduationCap, Globe, Calendar, Banknote, 
     MapPin, Gauge, ShieldCheck, Plane, MousePointer2, 
@@ -316,17 +317,28 @@ export default function JobDetail() {
 
         setDeleting(true);
         try {
-            // İlana ait tüm başvuruları temizle
-            const q = query(collection(db, "applications"), where("jobId", "==", id));
-            const snap = await getDocs(q);
-            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
-            await Promise.all(deletePromises);
+            // 1. İlana ait tüm başvuruları temizle
+            const appQ = query(collection(db, "applications"), where("jobId", "==", id));
+            const appSnap = await getDocs(appQ);
+            await Promise.all(appSnap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id))));
 
-            // İlanın kendisini temizle
+            // 2. İlana ait tüm sohbetleri ve mesajları temizle
+            const chatQ = query(collection(db, "chats"), where("jobId", "==", id));
+            const chatSnap = await getDocs(chatQ);
+            
+            await Promise.all(chatSnap.docs.map(async (chatDoc) => {
+                const chatId = chatDoc.id;
+                const msgQ = query(collection(db, "chats", chatId, "messages"));
+                const msgSnap = await getDocs(msgQ);
+                await Promise.all(msgSnap.docs.map(m => deleteDoc(doc(db, "chats", chatId, "messages", m.id))));
+                await deleteDoc(doc(db, "chats", chatId));
+            }));
+
+            // 3. İlanın kendisini temizle
             const deleteDocRef = doc(db, "jobs", id);
             await deleteDoc(deleteDocRef);
             
-            showNotification(`İlan ve bağlı ${snap.size} başvuru tamamen imha edildi.`, "success", "Operasyon Tamam");
+            showNotification(`İlan, ${appSnap.size} başvuru ve tüm mesajlaşmalar tamamen imha edildi.`, "success", "Operasyon Tamam");
             navigate("/jobs");
         } catch (err) {
             console.error("İlan imha edilirken hata:", err);

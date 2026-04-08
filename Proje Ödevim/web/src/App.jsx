@@ -63,15 +63,26 @@ function AppContent() {
 
   if (systemSettings?.maintenance && !isAdmin) {
     return (
-      <div className="page-wrapper min-h-screen flex items-center justify-center text-center p-4 bg-primary sm:p-8">
-        <div className="card glass w-full max-w-md p-6 border-primary animate-pulse flex flex-col items-center sm:p-10">
-          <div className="mb-4" style={{ width: 100, height: 100 }}>
-            <img src="/stajhub-icon.svg" alt="logo" className="w-full h-full drop-shadow-[0_0_15px_rgba(var(--primary-rgb),0.5)]" />
+      <div 
+        className="flex items-center justify-center text-center p-4 bg-primary"
+        style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          zIndex: 9999,
+          backgroundColor: 'var(--bg-primary)'
+        }}
+      >
+        <div className="card-glass p-10 border-primary flex flex-col items-center justify-center sm:p-14" style={{ minHeight: '850px', width: '95%' }}>
+          <div className="mb-10" style={{ width: 125, height: 140 }}>
+            <img src="/stajhub-icon.svg" alt="logo" className="w-full h-full drop-shadow-[0_0_20px_rgba(var(--primary-rgb),0.6)]" />
           </div>
-          <h2 className="text-3xl font-black tracking-tighter mb-8 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+          <h2 className="text-5xl font-black tracking-tighter mb-6 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
             StajHub
           </h2>
-          <h1 className="text-4xl font-bold mb-4 flex items-center gap-2">
+          <h1 className="text-4xl font-bold mb-8 flex items-center gap-2">
             <span role="img" aria-label="lock">🔒</span> Sistem Bakımda
           </h1>
           <p className="text-secondary mb-8 text-lg font-medium opacity-80">

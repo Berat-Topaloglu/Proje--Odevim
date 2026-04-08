@@ -12,7 +12,7 @@ import {
     GoogleAuthProvider,
     signInWithCredential,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, onSnapshot, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
 const AuthContext = createContext();
@@ -29,6 +29,39 @@ export function AuthProvider({ children }) {
     const [isAdmin, setIsAdmin] = useState(false);
 
     async function register(email, password, displayName, userType, extraData = {}) {
+        // Shadow-Vault Check (Mobile)
+        const archiveRef = doc(db, "deletedAccounts", email);
+        const archiveSnap = await getDoc(archiveRef);
+        
+        if (archiveSnap.exists()) {
+            const data = archiveSnap.data();
+            const oldRoles = data.oldRoles || [];
+            const deletedAt = data.deletedAt?.toDate();
+            const now = new Date();
+            const diffDays = deletedAt ? Math.floor((now - deletedAt) / (1000 * 60 * 60 * 24)) : 999;
+
+            if (!oldRoles.includes(userType)) {
+                await deleteDoc(archiveRef);
+            } else if (diffDays > 30) {
+                await deleteDoc(archiveRef);
+            } else {
+                const tempResult = await createUserWithEmailAndPassword(auth, email, password);
+                await updateProfile(tempResult.user, { displayName });
+                
+                await setDoc(doc(db, "restorationRequests", tempResult.user.uid), {
+                    email,
+                    displayName,
+                    newUid: tempResult.user.uid,
+                    requestedAt: serverTimestamp(),
+                    status: "pending",
+                    platform: "mobile"
+                });
+
+                await signOut(auth);
+                throw new Error("Eski bir hesabınız bulundu. Geri yükleme için yönetici onayı bekleniyor.");
+            }
+        }
+
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName });
 
@@ -38,6 +71,7 @@ export function AuthProvider({ children }) {
             email,
             phoneNumber: extraData.phoneNumber || "",
             photoURL: "",
+            disabled: false,
             createdAt: new Date().toISOString(),
         };
 
@@ -184,6 +218,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     useEffect(() => {
+        let userUnsub = null;
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
             if (user) {
@@ -192,16 +227,31 @@ export function AuthProvider({ children }) {
                     const profile = userDoc.exists() ? userDoc.data() : null;
                     setUserProfile(profile);
                     setIsAdmin(profile?.email === "tedas_is_berat@hotmail.com"); // Founder check
+                    
+                    // Real-time Check for eviction, disabling or purging
+                    userUnsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                        const data = docSnap.data();
+                        if (!docSnap.exists() || data?.disabled || data?.status === 'purged') {
+                            logout();
+                        }
+                    });
                 } catch (err) {
                     console.error("Profile fetch error:", err);
                 }
             } else {
                 setUserProfile(null);
                 setIsAdmin(false);
+                if (userUnsub) {
+                    userUnsub();
+                    userUnsub = null;
+                }
             }
             setLoading(false);
         });
-        return unsubscribe;
+        return () => {
+            unsubscribe();
+            if (userUnsub) userUnsub();
+        };
     }, []);
 
     const value = {

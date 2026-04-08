@@ -2,7 +2,38 @@ import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase/config";
+import { getSafeCvUrl, getDownloadCvUrl } from "../../utils/file_utils";
 import "./Applicants.css";
+
+const handleViewCV = (cvUrl) => {
+    if (!cvUrl) return;
+
+    try {
+        if (cvUrl.startsWith('http')) {
+            window.open(cvUrl, '_blank');
+            return;
+        }
+
+        const parts = cvUrl.split(',');
+        const byteString = atob(parts[1]);
+        const mimeString = parts[0].split(':')[1].split(';')[0];
+        
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+        
+        const blob = new Blob([ab], { type: mimeString });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+        console.error("PDF açma hatası:", err);
+        alert("PDF görüntülenirken bir hata oluştu.");
+    }
+};
 
 export default function Applicants() {
     const { jobId } = useParams();
@@ -267,15 +298,23 @@ export default function Applicants() {
                                                 👤 Profil
                                             </button>
                                             {app.cvUrl && (
-                                                <a
-                                                    href={app.cvUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="btn btn-info btn-sm"
-                                                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
-                                                >
-                                                    📄 CV'yi Görüntüle
-                                                </a>
+                                                <>
+                                                    <button
+                                                        onClick={() => handleViewCV(app.cvUrl)}
+                                                        className="btn btn-info btn-sm"
+                                                        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                                                    >
+                                                        👁️ Görüntüle
+                                                    </button>
+                                                    <a
+                                                        href={getDownloadCvUrl(app.cvUrl)}
+                                                        download
+                                                        className="btn btn-secondary btn-sm"
+                                                        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                                                    >
+                                                        ⬇️ İndir
+                                                    </a>
+                                                </>
                                             )}
                                             <button
                                                 className="btn btn-sm"

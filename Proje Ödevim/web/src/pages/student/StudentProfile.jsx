@@ -3,8 +3,10 @@ import { useParams } from "react-router-dom";
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, getDocs, serverTimestamp, addDoc } from "firebase/firestore";
 import { updateProfile, updatePassword } from "firebase/auth";
 import { uploadToCloudinary } from "../../utils/cloudinary";
+import { getSafeCvUrl, getDownloadCvUrl } from "../../utils/file_utils";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 import "./StudentProfile.css";
 
 //const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "Figma", "SQL", "Git", "TypeScript", "Vue.js", "C#", "C++", "PHP", "Swift", "Kotlin", "Flutter", "Django", "MongoDB", "PostgreSQL", "MySQL", "AWS", "Docker", "Machine Learning"];
@@ -12,6 +14,7 @@ import "./StudentProfile.css";
 export default function StudentProfile() {
     const { id: paramId } = useParams();
     const { currentUser, userProfile, updateDisplayName, logout } = useAuth();
+    const { showNotification, showConfirm, showPrompt } = useNotification();
     
     // Determine whose profile to show
     const effectiveId = paramId || currentUser?.uid;
@@ -204,19 +207,39 @@ export default function StudentProfile() {
         if (!isOwnProfile) return;
         setSaving(true);
         try {
-            // Update auth and users table
+            // 1. Update Firebase Auth Profile & Users Collection
             if (profile.displayName !== currentUser.displayName) {
                 await updateDisplayName(profile.displayName);
+            } else {
+                // Sadece users tablosunu güncel tut (displayName değişmese bile diğer alanlar için)
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    displayName: profile.displayName,
+                    email: profile.email || currentUser.email
+                });
             }
 
-            const { displayName, email, ...roleData } = profile;
-            await setDoc(doc(db, "students", currentUser.uid), roleData, { merge: true });
+            // Clean profile to remove undefined values before sending to Firestore
+            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
+                if (value !== undefined) {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
 
+            // 2. Update Student Specific Profile
+            await setDoc(doc(db, "students", currentUser.uid), {
+                ...cleanProfile,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            // 3. Sync local state
+            setProfile(prev => ({ ...prev, ...profile }));
             setEditMode(false);
             setSuccess("Profil güncellendi! ✅");
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
-            console.error(err);
+            console.error("Save error:", err);
+            setError("Profil kaydedilirken bir hata oluştu.");
         }
         setSaving(false);
     };
@@ -325,26 +348,57 @@ export default function StudentProfile() {
         startCamera(); // Restart camera for retake
     };
 
-    const handleCVUpload = async (e) => {
+    const handleCVUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        setUploadingCV(true);
-        try {
-            const url = await uploadToCloudinary(file);
-            setProfile((p) => ({ ...p, cvUrl: url }));
-            await setDoc(doc(db, "students", currentUser.uid), { cvUrl: url }, { merge: true });
-            setSuccess("CV yüklendi! ✅");
-            setTimeout(() => setSuccess(""), 3000);
-        } catch (err) {
-            console.error("CV yüklenemedi:", err);
-            setError("Dosya yüklenirken bir hata oluştu.");
-            setTimeout(() => setError(""), 3000);
+
+        if (file.type !== "application/pdf") {
+            setError("Lütfen sadece PDF formatında bir dosya yükleyin.");
+            return;
         }
-        setUploadingCV(false);
+
+        // Dosya boyutu kontrolü (Firestore limit: 1MB. Base64 %33 büyütür, bu yüzden ~750KB güvenli sınırdır)
+        if (file.size > 800 * 1024) {
+            setError("CV dosyası çok büyük (Maksimum 800KB). Lütfen daha küçük bir dosya yükleyin.");
+            return;
+        }
+
+        setUploadingCV(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64String = reader.result;
+                try {
+                    await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: base64String });
+                    setProfile(p => ({ ...p, cvUrl: base64String }));
+                    setSuccess("CV başarıyla kaydedildi. ✅");
+                    setUploadingCV(false);
+                    setTimeout(() => setSuccess(""), 3000);
+                } catch (err) {
+                    console.error("Firestore update error:", err);
+                    setError("CV kaydedilirken bir hata oluştu.");
+                    setUploadingCV(false);
+                }
+            };
+            reader.onerror = () => {
+                setError("Dosya okunurken bir hata oluştu.");
+                setUploadingCV(false);
+            };
+            reader.readAsDataURL(file);
+        } catch (err) {
+            console.error("CV Process Error:", err);
+            setError("İşlem sırasında bir hata oluştu.");
+            setUploadingCV(false);
+        }
     };
 
     const handleDeleteCV = async () => {
-        if (!window.confirm("CV'nizi silmek istediğinizden emin misiniz?")) return;
+        const confirmed = await showConfirm("CV'nizi silmek istediğinizden emin misiniz?", "CV Silme", "warning");
+        if (!confirmed) return;
+        
         try {
             await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: "" });
             setProfile(p => ({ ...p, cvUrl: "" }));
@@ -352,6 +406,39 @@ export default function StudentProfile() {
             setTimeout(() => setSuccess(""), 3000);
         } catch (err) {
             console.error("CV silinemedi:", err);
+        }
+    };
+
+    const handleViewCV = () => {
+        if (!profile.cvUrl) return;
+
+        try {
+            // Eğer Cloudinary URL ise direkt aç
+            if (profile.cvUrl.startsWith('http')) {
+                window.open(profile.cvUrl, '_blank');
+                return;
+            }
+
+            // Base64 ise Blob'a çevirip aç (Tarayıcı güvenliği için en iyisi)
+            const parts = profile.cvUrl.split(',');
+            const byteString = atob(parts[1]);
+            const mimeString = parts[0].split(':')[1].split(';')[0];
+            
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            
+            const blob = new Blob([ab], { type: mimeString });
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank');
+            
+            // Bellek temizliği (Opsiyonel ama iyi bir pratik)
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } catch (err) {
+            console.error("PDF açma hatası:", err);
+            setError("PDF görüntülenirken bir hata oluştu.");
         }
     };
 
@@ -657,17 +744,26 @@ export default function StudentProfile() {
                                     <span className="cv-icon">📄</span>
                                     <div>
                                         <p className="cv-label">CV Yüklendi</p>
-                                        <div className="cv-links">
-                                            <a
-                                                href={profile.cvUrl.includes("/upload/") ? profile.cvUrl.replace("/upload/", "/upload/fl_attachment:false/") : profile.cvUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="cv-view-link"
-                                            >
-                                                👁️ Görüntüle
-                                            </a>
-                                            {isOwnProfile && <button className="cv-delete-btn" onClick={handleDeleteCV}>🗑️ Sil</button>}
-                                        </div>
+                                                <div className="cv-links">
+                                                    <button
+                                                        onClick={handleViewCV}
+                                                        className="cv-view-link"
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                                    >
+                                                        👁️ Görüntüle
+                                                    </button>
+                                                    <a
+                                                        href={getDownloadCvUrl(profile.cvUrl)}
+                                                        download
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="cv-download-link"
+                                                        style={{ fontSize: "13px", color: "var(--primary-light)", display: "flex", alignItems: "center", gap: "4px" }}
+                                                    >
+                                                        ⬇️ İndir
+                                                    </a>
+                                                    {isOwnProfile && <button className="cv-delete-btn" onClick={handleDeleteCV}>🗑️ Sil</button>}
+                                                </div>
                                     </div>
                                 </div>
                             </div>

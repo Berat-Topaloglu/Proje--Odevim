@@ -147,10 +147,12 @@ export default function CompanyDashboard() {
                                 {[1, 2].map(i => <div key={i} className="skeleton" style={{ height: 60, borderRadius: 8 }} />)}
                             </div>
                         ) : jobs.length === 0 ? (
-                            <div className="empty-state">
-                                <Inbox size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-                                <p>Henüz ilan yok</p>
-                                <Link to="/company/post-job" className="btn btn-primary btn-sm">İlan Ver</Link>
+                            <div className="empty-state text-center" style={{ padding: '32px 16px' }}>
+                                <Briefcase size={40} style={{ opacity: 0.3, marginBottom: 16, color: 'var(--primary)' }} />
+                                <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)', maxWidth: '280px', margin: '0 auto' }}>
+                                    Geleceğin yeteneklerini keşfetmeye hazır mısınız? <br/>
+                                    <strong>İstediğiniz kriterlerde ilk ilanınızı hemen oluşturun!</strong>
+                                </p>
                             </div>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
