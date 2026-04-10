@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
 import { Text, Surface, Avatar, Button, List, Divider, IconButton, ActivityIndicator } from "react-native-paper";
 import { useAuth } from "../../src/context/AuthContext";
-import { doc, getDoc, collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useRouter } from "expo-router";
 
 export default function ProfileScreen() {
-    const { currentUser, userProfile, systemSettings, isAdmin, logout } = useAuth();
+    const { currentUser, userProfile, activeRole, logout } = useAuth();
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [reviews, setReviews] = useState([]);
     const router = useRouter();
 
-    const isStudent = userProfile?.type === "student";
+    const isStudent = activeRole === "student";
 
     useEffect(() => {
         const fetchData = async () => {
@@ -31,7 +31,13 @@ export default function ProfileScreen() {
                 const reviewSnap = await getDocs(q);
                 const fetchedReviews = reviewSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 // Memory sort
-                fetchedReviews.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                const getMs = (value) => {
+                    if (!value) return 0;
+                    if (typeof value.toMillis === "function") return value.toMillis();
+                    const date = new Date(value);
+                    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+                };
+                fetchedReviews.sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
                 setReviews(fetchedReviews);
             } catch (err) {
                 console.error("Profile data fetch error:", err);
@@ -51,165 +57,206 @@ export default function ProfileScreen() {
         }
     };
 
-    if (!currentUser) {
-        return (
-            <View style={styles.guestContainer}>
-                <Surface style={styles.guestCard} elevation={2}>
-                    <Avatar.Icon size={80} icon="account-key" style={styles.guestAvatar} />
-                    <Text variant="headlineSmall" style={styles.guestTitle}>Profiline Eriş</Text>
-                    <Text variant="bodyMedium" style={styles.guestText}>
-                        Başvurularını takip etmek ve profilini özelleştirmek için giriş yapmalısın.
-                    </Text>
-                    <View style={styles.guestActions}>
-                        <Button 
-                            mode="contained" 
-                            onPress={() => router.push("/(auth)/login")}
-                            style={styles.guestButton}
-                            contentStyle={{ height: 50 }}
-                        >
-                            Giriş Yap
-                        </Button>
-                        <Button 
-                            mode="outlined" 
-                            onPress={() => router.push("/(auth)/register")}
-                            style={[styles.guestButton, { marginTop: 15, borderColor: "#6366f1" }]}
-                            contentStyle={{ height: 50 }}
-                            textColor="#6366f1"
-                        >
-                            Yeni Kayıt Oluştur
-                        </Button>
-                    </View>
-                </Surface>
-            </View>
-        );
-    }
+    if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#6366f1" />;
 
     const initials = currentUser?.displayName?.charAt(0).toUpperCase() || "U";
-    const profileImage = isStudent ? (profileData?.photoUrl || currentUser?.photoURL) : (profileData?.logoUrl || currentUser?.photoURL);
+    const profileImage = isStudent ? profileData?.photoUrl : profileData?.logoUrl;
+
     return (
         <ScrollView style={styles.container}>
             <Surface style={styles.header} elevation={2}>
-                <View style={styles.avatarContainer}>
-                    {profileImage ? (
-                        <Avatar.Image size={100} source={{ uri: profileImage }} />
-                    ) : (
-                        <Avatar.Text size={100} label={initials} />
-                    )}
-                    <View style={styles.roleBadge}>
-                        <Text style={styles.roleText}>{isStudent ? "ÖĞRENCİ" : "ŞİRKET"}</Text>
-                    </View>
-                </View>
-                <Text variant="headlineSmall" style={styles.name}>{currentUser?.displayName || "İsimsiz Kullanıcı"}</Text>
-                <Text variant="bodyMedium" style={styles.email}>{currentUser?.email}</Text>
-                
-                {isStudent && (
-                    <View style={styles.secondaryInfo}>
-                        <Text style={styles.secondaryText}>{profileData?.university || "Üniversite Belirtilmedi"}</Text>
-                        <Text style={styles.secondaryText}>{profileData?.department || "Bölüm Belirtilmedi"}</Text>
-                    </View>
+                {profileImage ? (
+                    <Avatar.Image size={80} source={{ uri: profileImage }} style={styles.avatar} />
+                ) : (
+                    <Avatar.Text size={80} label={initials} style={styles.avatar} />
                 )}
+                <Text variant="headlineSmall" style={styles.name}>{currentUser?.displayName}</Text>
+                <Text variant="bodyMedium" style={styles.email}>{currentUser?.email}</Text>
+                <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                        {isStudent ? "ÖĞRENCİ" : "ŞİRKET"}
+                    </Text>
+                </View>
             </Surface>
 
-            <View style={styles.content}>
-                <Text variant="titleMedium" style={styles.sectionTitle}>Hesap Ayarları</Text>
-                <Surface style={styles.settingsCard} elevation={1}>
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <Text variant="titleMedium" style={styles.sectionTitle}>Hesap Bilgileri</Text>
+                    <Button
+                        mode="text"
+                        onPress={() => router.push(isStudent ? "/(student)/profile-edit" : "/(company)/profile-edit")}
+                        textColor="#6366f1"
+                    >
+                        Düzenle
+                    </Button>
+                </View>
+                <Surface style={styles.card} elevation={1}>
+                    <List.Item
+                        title={isStudent ? "Üniversite" : "Sektör"}
+                        description={isStudent ? (profileData?.university || "Belirtilmedi") : (profileData?.sector || "Belirtilmedi")}
+                        left={props => <List.Icon {...props} icon={isStudent ? "school" : "domain"} color="#6366f1" />}
+                    />
+                    <Divider style={styles.divider} />
+                    <List.Item
+                        title={isStudent ? "Bölüm" : "Web Sitesi"}
+                        description={isStudent ? (profileData?.department || "Belirtilmedi") : (profileData?.website || "Belirtilmedi")}
+                        left={props => <List.Icon {...props} icon={isStudent ? "book-open-variant" : "web"} color="#6366f1" />}
+                    />
+                    {isStudent && (
+                        <>
+                            <Divider style={styles.divider} />
+                            <List.Item
+                                title="Sınıf / GPA"
+                                description={profileData?.gpa || "Belirtilmedi"}
+                                left={props => <List.Icon {...props} icon="star" color="#6366f1" />}
+                            />
+                        </>
+                    )}
+                </Surface>
+            </View>
+
+            <View style={styles.section}>
+                <Text variant="titleMedium" style={styles.sectionTitle}>Ayarlar</Text>
+                <Surface style={styles.card} elevation={1}>
                     <List.Item
                         title="Profili Düzenle"
-                        description={isStudent ? "Eğitim ve yetenek bilgilerini güncelle" : "Şirket bilgilerini ve logoyu güncelle"}
-                        left={props => <List.Icon {...props} icon="account-edit" color="#6366f1" />}
+                        left={props => <List.Icon {...props} icon="account-edit" color="#94a3b8" />}
                         right={props => <List.Icon {...props} icon="chevron-right" color="#94a3b8" />}
                         onPress={() => router.push(isStudent ? "/(student)/profile-edit" : "/(company)/profile-edit")}
                     />
                     <Divider style={styles.divider} />
                     <List.Item
                         title="Şifre Değiştir"
-                        description="Hesap güvenliğini güncelle"
-                        left={props => <List.Icon {...props} icon="lock-reset" color="#6366f1" />}
+                        left={props => <List.Icon {...props} icon="lock" color="#94a3b8" />}
                         right={props => <List.Icon {...props} icon="chevron-right" color="#94a3b8" />}
-                        onPress={() => router.push("/change-password")}
                     />
                     <Divider style={styles.divider} />
                     <List.Item
                         title="Bildirimler"
-                        description="Bildirim ayarlarını yönet"
-                        left={props => <List.Icon {...props} icon="bell" color="#6366f1" />}
+                        left={props => <List.Icon {...props} icon="bell" color="#94a3b8" />}
                         right={props => <List.Icon {...props} icon="chevron-right" color="#94a3b8" />}
                         onPress={() => router.push("/notifications")}
                     />
                 </Surface>
+            </View>
 
-                {/* Reviews Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text variant="titleMedium" style={styles.sectionTitle}>⭐ Değerlendirmeler</Text>
-                        {reviews.length > 0 && (
-                            <Text style={{ color: "#fbbf24", fontWeight: "700" }}>
-                                ⭐️ {(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)} / 5
-                            </Text>
-                        )}
-                    </View>
-                    {reviews.length === 0 ? (
-                        <Surface style={[styles.card, { padding: 20, alignItems: "center" }]} elevation={1}>
-                            <Text style={{ color: "#94a3b8" }}>Henüz değerlendirme yok.</Text>
-                        </Surface>
-                    ) : (
-                        reviews.map((r) => (
-                            <Surface key={r.id} style={[styles.card, { padding: 15, marginBottom: 10 }]} elevation={1}>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ color: "#6366f1", fontWeight: "700", flex: 1 }}>{r.jobTitle}</Text>
-                                    <Text style={{ color: "#fbbf24" }}>{"⭐".repeat(r.rating)}</Text>
-                                </View>
-                                <Text style={{ color: "#e2e8f0", marginTop: 5, fontSize: 13 }}>{r.comment}</Text>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-                                    <Text style={{ color: "#64748b", fontSize: 10 }}>
-                                        {r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("tr-TR") : (r.createdAt ? new Date(r.createdAt).toLocaleDateString("tr-TR") : "—")}
-                                    </Text>
-                                </View>
-                            </Surface>
-                        ))
+            {/* Reviews Section */}
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <Text variant="titleMedium" style={styles.sectionTitle}>⭐ Değerlendirmeler</Text>
+                    {reviews.length > 0 && (
+                        <Text style={{ color: "#fbbf24", fontWeight: "700" }}>
+                            ⭐️ {(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)} / 5
+                        </Text>
                     )}
                 </View>
-
-                <Button
-                    mode="outlined"
-                    onPress={handleLogout}
-                    style={styles.logoutButton}
-                    textColor="#ef4444"
-                    icon="logout"
-                >
-                    Çıkış Yap
-                </Button>
-
-                <Text style={styles.version}>Versiyon 1.0.0</Text>
+                {reviews.length === 0 ? (
+                    <Surface style={[styles.card, { padding: 20, alignItems: "center" }]} elevation={1}>
+                        <Text style={{ color: "#94a3b8" }}>Henüz değerlendirme yok.</Text>
+                    </Surface>
+                ) : (
+                    reviews.map((r) => (
+                        <Surface key={r.id} style={[styles.card, { padding: 15, marginBottom: 10 }]} elevation={1}>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ color: "#6366f1", fontWeight: "700", flex: 1 }}>{r.jobTitle}</Text>
+                                <Text style={{ color: "#fbbf24" }}>{"⭐".repeat(r.rating)}</Text>
+                            </View>
+                            <Text style={{ color: "#e2e8f0", marginTop: 5, fontSize: 13 }}>{r.comment}</Text>
+                            <Text style={{ color: "#64748b", fontSize: 10, marginTop: 8 }}>
+                                {(() => {
+                                    const date = r.createdAt?.toDate ? r.createdAt.toDate() : (r.createdAt ? new Date(r.createdAt) : null);
+                                    return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("tr-TR") : "-";
+                                })()}
+                            </Text>
+                        </Surface>
+                    ))
+                )}
             </View>
+
+            <Button
+                mode="outlined"
+                onPress={handleLogout}
+                style={styles.logoutButton}
+                textColor="#ef4444"
+                icon="logout"
+            >
+                Çıkış Yap
+            </Button>
+
+            <Text style={styles.version}>Versiyon 1.0.0</Text>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#0f0f1a" },
-    guestContainer: { flex: 1, backgroundColor: "#0f0f1a", justifyContent: "center", padding: 20 },
-    guestCard: { padding: 30, borderRadius: 25, backgroundColor: "#16213e", alignItems: "center" },
-    guestAvatar: { backgroundColor: "#6366f1", marginBottom: 20 },
-    guestTitle: { color: "white", fontWeight: "800", marginBottom: 10 },
-    guestText: { color: "#94a3b8", textAlign: "center", marginBottom: 30 },
-    guestActions: { width: "100%" },
-    guestButton: { borderRadius: 12 },
-    header: { alignItems: "center", paddingVertical: 40, backgroundColor: "#16213e", borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-    avatarContainer: { position: "relative", marginBottom: 15 },
-    roleBadge: { position: "absolute", bottom: 0, right: -5, backgroundColor: "#6366f1", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 2, borderColor: "#16213e" },
-    roleText: { color: "white", fontSize: 10, fontWeight: "800" },
-    name: { color: "white", fontWeight: "800" },
-    email: { color: "#94a3b8", marginTop: 4 },
-    secondaryInfo: { marginTop: 15, alignItems: "center" },
-    secondaryText: { color: "#6366f1", fontSize: 13, fontWeight: "600" },
-    content: { padding: 25 },
-    sectionTitle: { color: "white", fontWeight: "700", marginBottom: 15 },
-    settingsCard: { borderRadius: 20, backgroundColor: "#16213e", overflow: "hidden" },
-    divider: { backgroundColor: "rgba(255, 255, 255, 0.05)" },
-    section: { marginTop: 10 },
-    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 15 },
-    card: { borderRadius: 15, backgroundColor: "#1e2a45" },
-    logoutButton: { marginTop: 40, borderRadius: 12, borderColor: "#ef4444", borderWidth: 1.5 },
-    version: { textAlign: "center", color: "#64748b", fontSize: 12, marginTop: 40, marginBottom: 20 }
+    container: {
+        flex: 1,
+        backgroundColor: "#0f0f1a",
+    },
+    header: {
+        alignItems: "center",
+        paddingVertical: 40,
+        backgroundColor: "#16213e",
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+    },
+    avatar: {
+        backgroundColor: "#6366f1",
+        marginBottom: 15,
+    },
+    name: {
+        color: "white",
+        fontWeight: "800",
+    },
+    email: {
+        color: "#94a3b8",
+        marginTop: 2,
+    },
+    badge: {
+        marginTop: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: "rgba(99, 102, 241, 0.2)",
+    },
+    badgeText: {
+        color: "#a5b4fc",
+        fontSize: 12,
+        fontWeight: "800",
+    },
+    section: {
+        padding: 20,
+        marginTop: 10,
+    },
+    sectionHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    sectionTitle: {
+        color: "white",
+        fontWeight: "700",
+        marginLeft: 5,
+    },
+    card: {
+        borderRadius: 20,
+        backgroundColor: "#16213e",
+        overflow: "hidden",
+    },
+    divider: {
+        backgroundColor: "#1e2a45",
+    },
+    logoutButton: {
+        margin: 20,
+        borderRadius: 12,
+        borderColor: "#ef4444",
+        borderWidth: 1.5,
+    },
+    version: {
+        textAlign: "center",
+        color: "#64748b",
+        fontSize: 12,
+        marginBottom: 40,
+    },
 });

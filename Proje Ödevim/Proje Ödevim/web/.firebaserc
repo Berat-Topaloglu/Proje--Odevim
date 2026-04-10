@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "proje-odevim-1b12c"
+  },
+  "targets": {
+    "proje-odevim-1b12c": {
+      "hosting": {
+        "stajhub": [
+          "stajhub"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

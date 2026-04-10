@@ -3,15 +3,15 @@ import { View, StyleSheet, ScrollView, Alert } from "react-native";
 import { Text, TextInput, Button, Surface, IconButton, ActivityIndicator, Chip } from "react-native-paper";
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from 'expo-file-system';
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-import { uploadToCloudinary } from "../../src/utils/cloudinary"; // Required for photos
+import { uploadToCloudinary } from "../../src/utils/cloudinary";
+
 const SKILLS_LIST = ["JavaScript", "React", "Python", "Java", "Node.js", "CSS", "HTML", "SQL", "Git", "TypeScript", "UI/UX"];
 
 export default function StudentProfileEdit() {
-    const { currentUser, updateProfileData } = useAuth();
+    const { currentUser } = useAuth();
     const [profile, setProfile] = useState({
         university: "", department: "", gpa: "", bio: "", skills: [], cvUrl: ""
     });
@@ -34,57 +34,15 @@ export default function StudentProfileEdit() {
         fetchProfile();
     }, [currentUser]);
 
-    const initials = currentUser?.displayName?.charAt(0).toUpperCase() || "U";
-    const profileImage = profile.photoUrl || currentUser?.photoURL;
-
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Clean profile object (remove undefined values)
-            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
-                if (value !== undefined) acc[key] = value;
-                return acc;
-            }, {});
-
-            const updateData = {
-                ...cleanProfile,
-                updatedAt: new Date().toISOString()
-            };
-
-            await updateDoc(doc(db, "students", currentUser.uid), updateData);
-            await updateProfileData(currentUser.displayName, profile.photoUrl, profile.phoneNumber || "");
-
-            
+            await updateDoc(doc(db, "students", currentUser.uid), profile);
             Alert.alert("Başarılı", "Profiliniz güncellendi.");
             router.back();
         } catch (err) {
             console.error("Save profile error:", err);
             Alert.alert("Hata", "Profil güncellenirken bir hata oluştu.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handlePhotoUpload = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: "image/*",
-                copyToCacheDirectory: true,
-            });
-
-            if (!result.canceled) {
-                setSaving(true);
-                const file = result.assets[0];
-                const url = await uploadToCloudinary(file.uri, file.name, file.mimeType);
-
-                setProfile(p => ({ ...p, photoUrl: url }));
-                // Instant sync noted
-                await updateProfileData(currentUser.displayName, url, profile.phoneNumber || "");
-                Alert.alert("Başarılı", "Profil fotoğrafınız güncellendi.");
-            }
-        } catch (err) {
-            console.error("Photo Upload error:", err);
-            Alert.alert("Hata", "Fotoğraf yüklenirken bir hata oluştu.");
         } finally {
             setSaving(false);
         }
@@ -100,16 +58,11 @@ export default function StudentProfileEdit() {
             if (!result.canceled) {
                 setUploadingCV(true);
                 const file = result.assets[0];
-                
-                // Construct Base64 explicitly to match Web exactly
-                const base64Content = await FileSystem.readAsStringAsync(file.uri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                });
-                const base64Url = `data:${file.mimeType || 'application/pdf'};base64,${base64Content}`;
+                const url = await uploadToCloudinary(file.uri, file.name, file.mimeType);
 
-                setProfile(p => ({ ...p, cvUrl: base64Url }));
-                await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: base64Url });
-                Alert.alert("Başarılı", "CV'niz başarıyla yüklendi.");
+                setProfile(p => ({ ...p, cvUrl: url }));
+                await updateDoc(doc(db, "students", currentUser.uid), { cvUrl: url });
+                Alert.alert("Başarılı", "CV'niz yüklendi.");
             }
         } catch (err) {
             console.error("CV Upload error:", err);
@@ -138,22 +91,6 @@ export default function StudentProfileEdit() {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Surface style={[styles.card, { alignItems: "center", marginBottom: 20 }]} elevation={1}>
-                    {profileImage ? (
-                        <Avatar.Image size={100} source={{ uri: profileImage }} />
-                    ) : (
-                        <Avatar.Text size={100} label={initials} />
-                    )}
-                    <Button 
-                        mode="text" 
-                        onPress={handlePhotoUpload}
-                        textColor="#6366f1"
-                        style={{ marginTop: 10 }}
-                    >
-                        Fotoğrafı Değiştir
-                    </Button>
-                </Surface>
-
                 <Surface style={styles.card} elevation={1}>
                     <TextInput
                         label="Üniversite"

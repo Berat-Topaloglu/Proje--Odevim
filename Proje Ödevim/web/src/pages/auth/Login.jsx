@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import "./Auth.css";
 
@@ -50,22 +51,33 @@ export default function Login() {
 
     return (
         <div className="auth-page">
-            <div className="auth-bg">
-                <div className="auth-blob blob-1" />
-                <div className="auth-blob blob-2" />
+            
+            {/* Visual Side */}
+            <div className="auth-visual-side">
+                <div className="auth-bg">
+                    <div className="auth-blob blob-1" />
+                    <div className="auth-blob blob-2" />
+                </div>
+                <div className="auth-visual-content">
+                    <h1 className="auth-mega-title">Hedeflerine <br/>Yön Ver. <Sparkles color="var(--primary)" size={48} style={{verticalAlign: 'middle'}}/></h1>
+                    <p className="auth-mega-subtitle">StajHub ile binlerce ilana saniyeler içinde ulaş. Özelliklerine değer veren en iyi şirketlerle eşleş.</p>
+                </div>
             </div>
 
-            <div className="auth-container page-enter">
-                <div className="auth-logo">
-                    <div className="logo-icon">
-                        <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
-                    </div>
-                    <span className="logo-text">Staj<span>Hub</span></span>
-                </div>
+            {/* Form Side */}
+            <div className="auth-form-side">
+                <div className="auth-container page-enter">
+                    <Link to="/" className="auth-logo">
+                        <div className="logo-icon">
+                            <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
+                        </div>
+                        <span className="logo-text" style={{ fontSize: 24 }}>Staj<span>Hub</span></span>
+                    </Link>
 
-                <div className="auth-card card-glass">
-                    <h1 className="auth-title">Hoş Geldin 👋</h1>
-                    <p className="auth-subtitle">Hesabına giriş yap</p>
+                    <div>
+                        <h1 className="auth-title">Hoş Geldin 👋</h1>
+                        <p className="auth-subtitle">Seni yeniden görmek harika!</p>
+                    </div>
 
                     {error && <div className="alert alert-error">{error}</div>}
 
@@ -97,7 +109,7 @@ export default function Login() {
                             <Link to="/forgot-password">Şifremi unuttum</Link>
                         </div>
 
-                        <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading}>
+                        <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading} style={{ padding: '16px', fontSize: 16 }}>
                             {loading ? <span className="loading-spinner" style={{ width: 18, height: 18 }} /> : "Giriş Yap"}
                         </button>
                     </form>
@@ -139,7 +151,7 @@ export default function Login() {
                     </div>
 
                     <p className="auth-switch">
-                        Hesabın yok mu? <Link to="/register">Kayıt ol</Link>
+                        Hesabın yok mu? <Link to="/register">Hemen Kayıt Ol</Link>
                     </p>
                 </div>
             </div>

@@ -1,15 +1,27 @@
-{
-  "projects": {
-    "default": "proje-odevim-1b12c"
-  },
-  "targets": {
-    "proje-odevim-1b12c": {
-      "hosting": {
-        "stajhub": [
-          "stajhub"
-        ]
-      }
-    }
-  },
-  "etags": {}
+﻿{
+    "projects":  {
+                     "default":  "proje-odevim-1b12c"
+                 },
+    "targets":  {
+                    "my-project-23b93":  {
+                                             "hosting":  {
+                                                             "stajhub":  [
+                                                                             "stajhub"
+                                                                         ]
+                                                         }
+                                         },
+                    "proje-odevim-1b12c":  {
+                                               "hosting":  {
+                                                               "stajhub":  [
+                                                                               "stajhub"
+                                                                           ],
+                                                               "stajhub-2":  [
+                                                                                 "stajhub-2"
+                                                                             ]
+                                                           }
+                                           }
+                },
+    "etags":  {
+
+              }
 }

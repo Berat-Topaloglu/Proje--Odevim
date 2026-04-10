@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import "./Auth.css";
 
 export default function Register() {
-    const [step, setStep] = useState(1); // 1: tip seç, 2: form
+    const [step, setStep] = useState(1);
     const [userType, setUserType] = useState("");
     const [form, setForm] = useState({ displayName: "", email: "", password: "", confirmPassword: "" });
     const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export default function Register() {
         const emailDomain = form.email.split("@")[1]?.toLowerCase();
         if (DISALLOWED_DOMAINS.includes(emailDomain)) {
             showNotification(
-                "Güvenlik nedeniyle geçici e-posta servisleri desteklenmemektedir. Lütfen kurumsal veya kişisel bir e-posta adresi kullanın.",
+                "Geçici e-posta servisleri desteklenmemektedir.",
                 "warning",
                 "⚠️ Güvenlik Uyarısı"
             );
@@ -81,49 +82,64 @@ export default function Register() {
 
     return (
         <div className="auth-page">
-            <div className="auth-bg">
-                <div className="auth-blob blob-1" />
-                <div className="auth-blob blob-2" />
+            
+            {/* Visual Side */}
+            <div className="auth-visual-side" style={{background: 'radial-gradient(circle at top left, rgba(139, 92, 246, 0.1) 0%, transparent 60%), radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.1) 0%, transparent 60%)'}}>
+                <div className="auth-bg">
+                    <div className="auth-blob blob-1" style={{background: 'var(--secondary)'}} />
+                    <div className="auth-blob blob-2" style={{background: 'var(--primary)'}} />
+                </div>
+                <div className="auth-visual-content">
+                    <h1 className="auth-mega-title">Aramıza <br/>Katıl. <Sparkles color="var(--secondary)" size={48} style={{verticalAlign: 'middle'}}/></h1>
+                    <p className="auth-mega-subtitle">Kariyer yolculuğunda sana en uygun şirketleri keşfet veya ekibini mükemmel yeteneklerle büyüt.</p>
+                </div>
             </div>
 
-            <div className="auth-container page-enter">
-                <div className="auth-logo">
-                    <div className="logo-icon">
-                        <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
-                    </div>
-                    <span className="logo-text">Staj<span>Hub</span></span>
-                </div>
+            {/* Form Side */}
+            <div className="auth-form-side">
+                <div className="auth-container page-enter">
+                    <Link to="/" className="auth-logo">
+                        <div className="logo-icon">
+                            <img src="/stajhub-icon.svg" alt="logo" style={{ width: '100%', height: '100%' }} />
+                        </div>
+                        <span className="logo-text" style={{ fontSize: 24 }}>Staj<span>Hub</span></span>
+                    </Link>
 
-                <div className="auth-card card-glass">
                     {step === 1 ? (
                         <>
-                            <h1 className="auth-title">Nasıl katılıyorsun? 🚀</h1>
-                            <p className="auth-subtitle">Hesap türünü seç</p>
+                            <div>
+                                <h1 className="auth-title">Nasıl Katılıyorsun? 🚀</h1>
+                                <p className="auth-subtitle">Sana özel deneyim için hesap türünü seç.</p>
+                            </div>
 
                             <div className="type-select-grid">
                                 <button className="type-select-card" onClick={() => handleTypeSelect("student")}>
                                     <div className="type-icon">🎓</div>
-                                    <h3>Öğrenci</h3>
-                                    <p>Staj ilanlarına göz at ve başvur</p>
+                                    <h3>Öğrenci / Mezun</h3>
+                                    <p>İlanlara göz at, başvur, şirketlerle iletişim kur.</p>
+                                    <div style={{marginTop: 16, color: 'var(--primary)', opacity: 0.8}}><ArrowRight size={20}/></div>
                                 </button>
                                 <button className="type-select-card" onClick={() => handleTypeSelect("company")}>
                                     <div className="type-icon">🏢</div>
-                                    <h3>Şirket</h3>
-                                    <p>Stajer ilanı ver, aday bul</p>
+                                    <h3>Şirket Yetkilisi</h3>
+                                    <p>Stajyer ilanı ver, Türkiye'nin yeteneklerini keşfet.</p>
+                                    <div style={{marginTop: 16, color: 'var(--primary)', opacity: 0.8}}><ArrowRight size={20}/></div>
                                 </button>
                             </div>
 
                             <p className="auth-switch">
-                                Hesabın var mı? <Link to="/login">Giriş yap</Link>
+                                Zaten hesabın var mı? <Link to="/login">Giriş Yap</Link>
                             </p>
                         </>
                     ) : (
                         <>
                             <button className="back-btn" onClick={() => setStep(1)}>← Geri</button>
-                            <h1 className="auth-title">
-                                {userType === "student" ? "🎓 Öğrenci Kaydı" : "🏢 Şirket Kaydı"}
-                            </h1>
-                            <p className="auth-subtitle">Bilgilerini gir</p>
+                            <div>
+                                <h1 className="auth-title">
+                                    {userType === "student" ? "Öğrenci Kaydı 🎓" : "Şirket Kaydı 🏢"}
+                                </h1>
+                                <p className="auth-subtitle">Hesabını oluşturmak için bilgilerini gir.</p>
+                            </div>
 
                             {error && <div className="alert alert-error">{error}</div>}
 
@@ -142,7 +158,7 @@ export default function Register() {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">E-posta</label>
+                                    <label className="form-label">E-posta Adresi</label>
                                     <input
                                         type="email"
                                         className="form-input"
@@ -154,7 +170,7 @@ export default function Register() {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Şifre</label>
+                                    <label className="form-label">Şifre Belirle</label>
                                     <input
                                         type="password"
                                         className="form-input"
@@ -178,12 +194,12 @@ export default function Register() {
                                     />
                                 </div>
 
-                                <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading}>
+                                <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading} style={{ padding: '16px', fontSize: 16 }}>
                                     {loading ? <span className="loading-spinner" style={{ width: 18, height: 18 }} /> : "Kayıt Ol"}
                                 </button>
                             </form>
 
-                            <div className="auth-divider"><span>veya</span></div>
+                            <div className="auth-divider"><span>veya Google ile</span></div>
 
                             <button className="btn-google" onClick={handleGoogle} disabled={loading} type="button">
                                 <svg viewBox="0 0 24 24" width="20" height="20">
@@ -192,11 +208,11 @@ export default function Register() {
                                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                                 </svg>
-                                Google ile Kayıt Ol
+                                Google Hızlı Kayıt
                             </button>
 
                             <p className="auth-switch">
-                                Hesabın var mı? <Link to="/login">Giriş yap</Link>
+                                Zaten hesabın var mı? <Link to="/login">Buradan Giriş Yap</Link>
                             </p>
                         </>
                     )}

@@ -1,0 +1,187 @@
+/* Omega Command Center - Company Dashboard */
+.company-dashboard-omega {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 24px;
+    animation: fadeInOmega 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.command-deck-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: minmax(160px, auto);
+    gap: 24px;
+}
+
+/* Bento Hero */
+.bento-hero-omega {
+    grid-column: span 8;
+    grid-row: span 2;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 32px;
+    padding: 48px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.bento-hero-omega::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    animation: auroraRotate 20s linear infinite;
+    z-index: 0;
+}
+
+.hero-content-omega {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-content-omega h1 {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Quick Action Card */
+.bento-action-omega {
+    grid-column: span 4;
+    grid-row: span 2;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.bento-action-omega:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--primary);
+    transform: translateY(-8px) scale(1.02);
+}
+
+/* Stat Cards */
+.stat-card-omega {
+    grid-column: span 3;
+    background: rgba(15, 15, 25, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.stat-card-omega:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.stat-value-omega {
+    font-size: 32px;
+    font-weight: 800;
+    display: block;
+}
+
+.stat-label-omega {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* List Cards */
+.bento-list-omega {
+    grid-column: span 6;
+    grid-row: span 3;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 32px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+}
+
+.list-header-omega {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.list-title-omega {
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.omega-item-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 16px;
+    transition: background 0.2s;
+    text-decoration: none;
+    color: inherit;
+}
+
+.omega-item-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.item-badge-omega {
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+/* Animations */
+@keyframes auroraRotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeInOmega {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .bento-hero-omega, .bento-list-omega { grid-column: span 12; }
+    .bento-action-omega { grid-column: span 6; }
+    .stat-card-omega { grid-column: span 6; }
+}
+
+@media (max-width: 768px) {
+    .command-deck-grid { grid-template-columns: 1fr; }
+    .bento-hero-omega, .bento-action-omega, .stat-card-omega, .bento-list-omega { grid-column: span 12; }
+    .hero-content-omega h1 { font-size: 32px; }
+}

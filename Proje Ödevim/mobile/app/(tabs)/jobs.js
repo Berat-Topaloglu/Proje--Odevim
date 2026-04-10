@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ScrollView } from "react-native";
+import { View, StyleSheet, FlatList, RefreshControl, ScrollView } from "react-native";
 import { Text, Searchbar, Card, Avatar, Chip, ActivityIndicator, Surface, IconButton } from "react-native-paper";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useRouter } from "expo-router";
 
-const SECTORS = ["Yazılım", "Tasarım", "Pazarlama", "Mühendislik", "Finans", "Sağlık", "Eğitim", "Diğer"];
+const SECTORS = ["Yazılım", "Tasarım", "Pazarlama", "Mühendislik", "Finans"];
 
 export default function JobsScreen() {
     const [search, setSearch] = useState("");
@@ -15,39 +15,39 @@ export default function JobsScreen() {
     const [selectedSector, setSelectedSector] = useState(null);
     const router = useRouter();
 
-    useEffect(() => {
-        setLoading(true);
-        const q = query(
-            collection(db, "jobs"),
-            where("status", "==", "active"),
-            // orderBy removed to avoid index requirement
-        );
+    const fetchJobs = async () => {
+        try {
+            let q = query(
+                collection(db, "jobs"),
+                where("status", "==", "active"),
+                orderBy("createdAt", "desc")
+            );
 
-        const unsub = onSnapshot(q, (snap) => {
-            let jobsData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
-            // Memory sort: createdAt desc
-            jobsData.sort((a, b) => {
-                const dateA = a.createdAt ? new Date(a.createdAt.toDate()) : 0; // Assuming createdAt is a Firestore Timestamp
-                const dateB = b.createdAt ? new Date(b.createdAt.toDate()) : 0; // Assuming createdAt is a Firestore Timestamp
-                return dateB - dateA;
-            });
+            const snap = await getDocs(q);
+            let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            setJobs(jobsData);
-            setLoading(false);
-            setRefreshing(false);
-        }, (err) => {
+            // Fallback for demo if empty
+            if (data.length === 0) {
+                data = DEMO_JOBS;
+            }
+
+            setJobs(data);
+        } catch (err) {
             console.error("Fetch jobs error:", err);
+            setJobs(DEMO_JOBS);
+        } finally {
             setLoading(false);
             setRefreshing(false);
-        });
+        }
+    };
 
-        return () => unsubscribe();
+    useEffect(() => {
+        fetchJobs();
     }, []);
 
     const onRefresh = () => {
         setRefreshing(true);
-        // Snapshot handles updates, but this allows manual force refresh if needed
+        fetchJobs();
     };
 
     const filteredJobs = jobs.filter(job => {
@@ -57,7 +57,15 @@ export default function JobsScreen() {
         return matchesSearch && matchesSector;
     });
 
-    const renderJobItem = ({ item }) => (
+    const renderJobItem = ({ item }) => {
+        const locationLabel =
+            item.type === "remote"
+                ? "🌐 Uzaktan"
+                : item.type === "hybrid"
+                    ? "🔁 Hibrit"
+                    : `📍 ${item.location || "Ofis"}`;
+
+        return (
         <Card
             style={styles.card}
             onPress={() => router.push({ pathname: "/(student)/job-detail", params: { id: item.id } })}
@@ -66,14 +74,14 @@ export default function JobsScreen() {
                 {item.companyLogo ? (
                     <Avatar.Image size={45} source={{ uri: item.companyLogo }} style={styles.jobAvatar} />
                 ) : (
-                    <Avatar.Text size={45} label={item.companyName.charAt(0)} style={styles.jobAvatar} />
+                    <Avatar.Text size={45} label={item.companyName?.charAt(0) || "?"} style={styles.jobAvatar} />
                 )}
                 <View style={styles.jobInfo}>
                     <Text variant="titleMedium" style={styles.jobTitle}>{item.title}</Text>
                     <Text variant="bodySmall" style={styles.jobCompany}>{item.companyName}</Text>
                     <View style={styles.badgeRow}>
                         <View style={styles.badgeSmall}>
-                            <Text style={styles.badgeText}>{item.type === "remote" ? "🌐 Uzaktan" : "📍 " + (item.location || "Ofis")}</Text>
+                            <Text style={styles.badgeText}>{locationLabel}</Text>
                         </View>
                         <View style={[styles.badgeSmall, { backgroundColor: "rgba(16, 185, 129, 0.1)" }]}>
                             <Text style={[styles.badgeText, { color: "#34d399" }]}>{item.sector}</Text>
@@ -82,7 +90,8 @@ export default function JobsScreen() {
                 </View>
             </Card.Content>
         </Card>
-    );
+        );
+    };
 
     return (
         <View style={styles.container}>

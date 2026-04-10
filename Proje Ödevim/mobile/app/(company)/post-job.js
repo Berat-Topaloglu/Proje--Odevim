@@ -1,12 +1,17 @@
 import React, { useState } from "react";
-import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
-import { Text, Surface, TextInput, Button, IconButton, Chip, HelperText } from "react-native-paper";
+import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { Text, Surface, TextInput, Button, IconButton, Chip } from "react-native-paper";
 import { useRouter } from "expo-router";
-import { collection, addDoc, doc, getDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
 
 const SKILLS = ["React", "JavaScript", "Python", "UI/UX", "Node.js", "Java", "SQL", "Mobile Dev"];
+const TYPE_OPTIONS = [
+    { value: "remote", label: "Uzaktan" },
+    { value: "hybrid", label: "Hibrit" },
+    { value: "onsite", label: "Ofis" },
+];
 
 export default function PostJobScreen() {
     const { currentUser } = useAuth();
@@ -26,7 +31,11 @@ export default function PostJobScreen() {
     };
 
     const handleSubmit = async () => {
-        if (!form.title || !form.description) return;
+        if (!currentUser) return;
+        if (!form.title || !form.description) {
+            Alert.alert("Eksik Bilgi", "İlan başlığı ve açıklaması zorunludur.");
+            return;
+        }
         setLoading(true);
         try {
             // Fetch company logo before posting
@@ -40,11 +49,12 @@ export default function PostJobScreen() {
                 companyLogo: companyData?.logoUrl || "",
                 skills: selectedSkills,
                 status: "active",
-                createdAt: new Date().toISOString()
+                createdAt: serverTimestamp()
             });
             router.replace("/(tabs)/applications");
         } catch (err) {
             console.error("Post job error:", err);
+            Alert.alert("Hata", "İlan yayınlanırken bir hata oluştu.");
         } finally {
             setLoading(false);
         }
@@ -95,6 +105,21 @@ export default function PostJobScreen() {
                             style={styles.input}
                             placeholder="Örn: İstanbul veya Remote"
                         />
+
+                        <Text variant="labelLarge" style={styles.label}>Çalışma Tipi</Text>
+                        <View style={styles.skillsContainer}>
+                            {TYPE_OPTIONS.map(option => (
+                                <Chip
+                                    key={option.value}
+                                    selected={form.type === option.value}
+                                    onPress={() => setForm(f => ({ ...f, type: option.value }))}
+                                    style={styles.chip}
+                                    selectedColor="#6366f1"
+                                >
+                                    {option.label}
+                                </Chip>
+                            ))}
+                        </View>
 
                         <TextInput
                             label="İş Açıklaması"
@@ -191,3 +216,12 @@ const styles = StyleSheet.create({
         marginBottom: 50,
     },
 });
+
+
+
+
+
+
+
+
+

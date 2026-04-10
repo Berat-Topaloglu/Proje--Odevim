@@ -1,373 +1,276 @@
-.profile-header {
+/* ===================== MASTERPIECE — STUDENT PROFILE ===================== */
+
+.profile-container {
+    padding: 60px 40px;
+    max-width: 1300px;
+    margin: 0 auto;
+}
+
+/* 1. HERO HEADER CARD */
+.profile-header-card {
+    background: linear-gradient(135deg, var(--bg-card), rgba(139, 92, 246, 0.05));
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-xl);
+    padding: 60px;
+    margin-bottom: 40px;
     display: flex;
+    gap: 60px;
     align-items: center;
-    gap: 24px;
-    flex-wrap: wrap;
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-header-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -20%;
+    width: 100%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.05) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 .profile-avatar-container {
     position: relative;
-    display: inline-block;
+    flex-shrink: 0;
 }
 
 .profile-avatar {
-    background: var(--gradient-primary);
-    color: white;
-    font-weight: 800;
-    font-size: 32px;
+    width: 160px;
+    height: 160px;
+    border-radius: 40px;
+    background: var(--bg-elevated);
+    border: 2px solid var(--border-accent);
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    overflow: hidden;
-    position: relative;
-    border: 4px solid var(--bg-card);
+    font-size: 56px;
+    font-weight: 800;
+    color: var(--secondary);
     box-shadow: var(--shadow-md);
+    transition: var(--transition);
 }
 
 .avatar-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: inherit;
 }
 
-.photo-upload-badge {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    background: var(--primary);
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border: 3px solid var(--bg-card);
-    font-size: 14px;
-    transition: var(--transition);
-}
-
-.photo-upload-badge:hover {
-    transform: scale(1.1);
-    background: var(--primary-light);
-}
-
-.profile-header-info {
+.profile-hero-info {
     flex: 1;
+    z-index: 2;
 }
 
 .profile-name {
-    font-size: 24px;
-    font-weight: 800;
+    font-size: 44px;
+    font-weight: 900;
     color: var(--text-primary);
-    margin-bottom: 4px;
-}
-
-.profile-email {
-    color: var(--text-muted);
-    font-size: 14px;
-    margin-bottom: 8px;
-}
-
-.section-title2 {
-    font-size: 17px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 16px;
-}
-
-.profile-form {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    align-items: center;
+    gap: 20px;
+    letter-spacing: -1.5px;
 }
 
-.profile-info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-
-.info-item {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: var(--radius-md);
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-}
-
-.info-item.wide {
-    grid-column: 1 / -1;
-}
-
-.info-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-
-.info-item.wide {
-    grid-column: 1 / -1;
-}
-
-.info-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-}
-
-.info-value {
-    font-size: 15px;
-    color: var(--text-primary);
-    font-weight: 500;
-    line-height: 1.5;
-}
-
-/* Skills */
-.skills-grid {
+.profile-meta-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 16px;
-}
-
-.skill-chip {
-    padding: 7px 14px;
-    border-radius: var(--radius-full);
-    border: 1px solid var(--border);
-    background: transparent;
+    align-items: center;
+    gap: 32px;
+    margin-top: 20px;
     color: var(--text-secondary);
-    font-size: 13px;
-    font-family: 'Inter', sans-serif;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.skill-chip:hover {
-    border-color: var(--primary);
-    color: var(--primary-light);
-}
-
-.skill-chip.selected {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: var(--primary);
-    color: var(--primary-light);
     font-weight: 600;
 }
 
-.custom-skill-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+.profile-bio {
+    margin-top: 32px;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 850px;
 }
 
-.selected-skills-preview {
-    margin-top: 8px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-}
-
-/* CV Box */
-.cv-links {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-top: 4px;
-}
-
-.cv-delete-btn {
-    background: none;
-    border: none;
-    color: #f87171;
-    font-size: 13px;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.cv-delete-btn:hover {
-    color: var(--danger);
-    transform: translateX(2px);
-}
-
-/* Photo Modal */
-.photo-modal {
-    max-width: 500px !important;
-    text-align: center;
-    border: 1px solid var(--border-hover);
-}
-
-.photo-options {
+/* 2. MASTERPIECE BENTO GRID */
+.profile-bento-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 28px;
 }
 
-.photo-option-btn {
-    padding: 24px !important;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    color: #fff;
-}
-
-.photo-option-btn span {
-    font-size: 32px;
-}
-
-.photo-option-btn p {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-/* Camera Improved */
-.camera-wrapper {
-    position: relative;
-}
-
-.camera-container {
-    background: #000;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    position: relative;
-    aspect-ratio: 4/3;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-.video-preview,
-.photo-preview-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.photo-preview-img {
-    animation: fadeIn 0.3s ease;
-}
-
-.shutter-btn {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60px;
-    height: 60px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 4px solid #fff;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.bento-card {
+    background: var(--bg-card);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 40px;
     transition: var(--transition);
-    z-index: 10;
+    box-shadow: var(--shadow-md);
 }
 
-.shutter-btn:hover {
-    background: rgba(255, 255, 255, 0.4);
-    transform: translateX(-50%) scale(1.1);
+.bento-card:hover {
+    border-color: var(--border-accent);
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
 }
 
-.shutter-btn:active {
-    transform: translateX(-50%) scale(0.9);
+/* Grid Layouts */
+.bento-info   { grid-column: span 8; }
+.bento-skills { grid-column: span 4; }
+.bento-cv     { grid-column: span 5; }
+.bento-extra  { grid-column: span 7; }
+
+/* 3. SECTION HEADERS */
+.section-header-pro {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
 }
 
-.shutter-icon {
+.section-icon {
     width: 44px;
     height: 44px;
-    background: #fff;
-    border-radius: 50%;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-.camera-controls {
+    border-radius: 14px;
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--secondary);
     display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 12px;
+    border: 1px solid var(--border-accent);
 }
 
-/* CV */
-.cv-section {
+.section-title-pro {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+}
+
+/* 4. CONTENT ITEMS */
+.info-item-pro {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
 }
 
-.cv-uploaded {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+.info-label-pro {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.cv-icon {
-    font-size: 36px;
-}
-
-.cv-label {
-    font-size: 15px;
-    font-weight: 600;
+.info-value-pro {
+    font-size: 16px;
+    font-weight: 700;
     color: var(--text-primary);
 }
 
-.cv-view-link {
-    font-size: 13px;
-    color: var(--primary-light);
+/* 5. SKILL TAGS */
+.skill-cloud-pro {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
-/* Actions */
-.profile-actions {
+.skill-tag-pro {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.skill-tag-pro:hover {
+    border-color: var(--secondary);
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--primary);
+}
+
+/* 6. CV SECTION */
+.cv-file-display {
     display: flex;
-    gap: 12px;
-    justify-content: flex-end;
+    align-items: center;
+    gap: 24px;
+    padding: 28px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: var(--transition);
+}
+
+.cv-file-display:hover {
+    background: rgba(255,255,255,0.04);
+    border-color: var(--secondary);
+}
+
+/* 7. HEATMAP MASTERPIECE */
+.heatmap-tiles-pro {
+    display: grid;
+    grid-template-columns: repeat(28, 1fr);
+    gap: 6px;
     margin-top: 24px;
 }
 
-.section-header-profile {
-    margin-bottom: 0;
+.tile-pro {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: var(--transition);
+}
+
+.tile-pro:hover {
+    transform: scale(1.2);
+    background: var(--secondary);
+    box-shadow: 0 0 10px var(--secondary);
+}
+
+/* Button Masterpiece */
+.btn-pro {
+    padding: 16px 32px;
+    border-radius: 16px;
+    font-weight: 800;
+    font-size: 15px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: var(--secondary);
+    color: white;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3);
+}
+
+.btn-primary:hover {
+    background: #7c3aed;
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .profile-bento-grid { grid-template-columns: 1fr; }
+    .bento-info, .bento-skills, .bento-cv, .bento-extra { grid-column: span 12; }
 }
 
 @media (max-width: 768px) {
-    .profile-info-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .info-item.wide {
-        grid-column: unset;
-    }
-
-    .photo-options {
-        grid-template-columns: 1fr;
-    }
-
-    .photo-modal {
-        width: 95% !important;
-        margin: 10px auto !important;
-        padding: 16px !important;
-    }
-
-    .camera-controls {
+    .profile-header-card {
         flex-direction: column;
-        gap: 8px;
+        text-align: center;
+        padding: 40px;
     }
-
-    .camera-controls .btn {
-        width: 100%;
-        margin: 0;
-    }
-}
-
-.w-full {
-    width: 100% !important;
+    .profile-meta-row { justify-content: center; }
+    .profile-name { font-size: 32px; justify-content: center; }
 }

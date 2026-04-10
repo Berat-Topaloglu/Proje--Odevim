@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "550310950985",
+    "project_id": "proje-odevim-1b12c",
+    "storage_bucket": "proje-odevim-1b12c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:550310950985:android:ce950219e2ae947b7c6798",
+        "android_client_info": {
+          "package_name": "com.stajhub.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHbYcpIbMfZHKUgxbAHgmnSLrMnTAQU7o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

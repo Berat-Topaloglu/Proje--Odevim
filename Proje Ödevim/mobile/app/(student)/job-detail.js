@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Modal, Alert } from "react-native";
+import { View, StyleSheet, ScrollView, Modal } from "react-native";
 import { Text, Surface, Button, IconButton, Avatar, List, TextInput, ActivityIndicator, Divider } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, getDocs } from "firebase/firestore";
@@ -8,7 +8,7 @@ import { useAuth } from "../../src/context/AuthContext";
 
 export default function JobDetailScreen() {
     const { id } = useLocalSearchParams();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, activeRole } = useAuth();
     const [job, setJob] = useState(null);
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
@@ -16,10 +16,13 @@ export default function JobDetailScreen() {
     const [submitting, setSubmitting] = useState(false);
     const router = useRouter();
 
+    const jobId = Array.isArray(id) ? id[0] : id;
+
     useEffect(() => {
         const fetchJob = async () => {
             try {
-                const snap = await getDoc(doc(db, "jobs", id));
+                if (!jobId) return;
+                const snap = await getDoc(doc(db, "jobs", jobId));
                 if (snap.exists()) {
                     setJob({ id: snap.id, ...snap.data() });
                 }
@@ -30,9 +33,10 @@ export default function JobDetailScreen() {
             }
         };
         fetchJob();
-    }, [id]);
+    }, [jobId]);
 
     const handleApply = async () => {
+        if (!job || !currentUser) return;
         setSubmitting(true);
         try {
             await addDoc(collection(db, "applications"), {
@@ -45,7 +49,7 @@ export default function JobDetailScreen() {
                 email: currentUser.email,
                 coverLetter: coverLetter,
                 status: "pending",
-                createdAt: new Date().toISOString()
+                createdAt: serverTimestamp()
             });
             setModalVisible(false);
             router.back();
@@ -57,7 +61,7 @@ export default function JobDetailScreen() {
     };
 
     const handleStartChat = async () => {
-        if (!currentUser) {
+        if (!currentUser || !job) {
             router.push("/(auth)/login");
             return;
         }
@@ -111,9 +115,7 @@ export default function JobDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <ScrollView 
-                contentContainerStyle={{ paddingBottom: 120 }}
-            >
+            <ScrollView>
                 <Surface style={styles.header} elevation={2}>
                     <IconButton
                         icon="arrow-left"
@@ -173,23 +175,15 @@ export default function JobDetailScreen() {
                         </>
                     )}
                 </View>
+                <View style={{ height: 100 }} />
             </ScrollView>
 
-            {(!currentUser || userProfile?.type === "student") && (
+            {activeRole === "student" && (
                 <Surface style={styles.footer} elevation={4}>
                     <View style={{ flexDirection: "row", gap: 10 }}>
                         <Button
                             mode="outlined"
-                            onPress={() => {
-                                if (!currentUser) {
-                                    Alert.alert("Giriş Gerekli", "Şirketle iletişime geçmek için giriş yapmalısın.", [
-                                        { text: "Vazgeç", style: "cancel" },
-                                        { text: "Giriş Yap", onPress: () => router.push("/(auth)/login") }
-                                    ]);
-                                } else {
-                                    handleStartChat();
-                                }
-                            }}
+                            onPress={handleStartChat}
                             style={[styles.applyButton, { flex: 1, backgroundColor: "transparent" }]}
                             contentStyle={{ height: 50 }}
                             textColor="#6366f1"
@@ -198,16 +192,7 @@ export default function JobDetailScreen() {
                         </Button>
                         <Button
                             mode="contained"
-                            onPress={() => {
-                                if (!currentUser) {
-                                    Alert.alert("Giriş Gerekli", "İlana başvurmak için giriş yapmalısın.", [
-                                        { text: "Vazgeç", style: "cancel" },
-                                        { text: "Giriş Yap", onPress: () => router.push("/(auth)/login") }
-                                    ]);
-                                } else {
-                                    setModalVisible(true);
-                                }
-                            }}
+                            onPress={() => setModalVisible(true)}
                             style={[styles.applyButton, { flex: 1.5 }]}
                             contentStyle={{ height: 50 }}
                         >
@@ -278,3 +263,14 @@ const styles = StyleSheet.create({
     modalInput: { backgroundColor: "#0f0f1a", marginBottom: 20 },
     modalActions: { flexDirection: "row" },
 });
+
+
+
+
+
+
+
+
+
+
+

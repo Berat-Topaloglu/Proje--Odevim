@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -10,8 +10,7 @@ import {
     updateProfile,
     sendEmailVerification,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, onSnapshot, collection, query, where, getDocs, deleteDoc, serverTimestamp } from "firebase/firestore";
-import emailjs from '@emailjs/browser';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, onSnapshot, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
 const AuthContext = createContext();
@@ -36,62 +35,32 @@ export function AuthProvider({ children }) {
         return unsub;
     }, []);
 
-    async function register(email, password, displayName, userType) {
-        // Shadow-Vault Check
-        const archiveRef = doc(db, "deletedAccounts", email);
-        const archiveSnap = await getDoc(archiveRef);
-        
-        if (archiveSnap.exists()) {
-            const data = archiveSnap.data();
-            const oldRoles = data.oldRoles || [];
-            const deletedAt = data.deletedAt?.toDate();
-            const now = new Date();
-            const diffDays = deletedAt ? Math.floor((now - deletedAt) / (1000 * 60 * 60 * 24)) : 999;
-
-            if (!oldRoles.includes(userType)) {
-                // Different role: Clear archive and start fresh
-                await deleteDoc(archiveRef);
-            } else if (diffDays > 30) {
-                // Role same but expired (>30 days): Clear archive and start fresh
-                await deleteDoc(archiveRef);
-            } else {
-                // Role same and within 30 days: Request Restoration
-                const tempResult = await createUserWithEmailAndPassword(auth, email, password);
-                await updateProfile(tempResult.user, { displayName });
-                
-                await setDoc(doc(db, "restorationRequests", tempResult.user.uid), {
-                    email,
-                    displayName,
-                    newUid: tempResult.user.uid,
-                    requestedAt: serverTimestamp(),
-                    status: "pending"
-                });
-
-                // Notify admin via EmailJS
-                try {
-                    await emailjs.send("service_wupm5uc", "template_kvsc4vm", {
-                        to_email: "berattopaloglu61@gmail.com", // Founders email
-                        to_name: "Kurucu",
-                        message: `DİKKAT: ${email} adresli eski bir kullanıcı (${userType}) tekrar kayıt oldu ve hesap geri yükleme talebi oluşturdu. Onayınız bekleniyor.`
-                    }, "NPz_h8os1UzhSm7Q2");
-                } catch (e) { console.error("Admin notify error:", e); }
-
-                await signOut(auth); // Sign them back out until approved
-                throw new Error("Eski bir kaydınız bulundu. Hesabınızın geri yüklenmesi için yöneticiye onay talebi gönderildi. Lütfen onay bekleyin.");
-            }
+    // Firestore tabanlı admin kontrolü — hardcoded email yerine
+    const checkIsAdmin = useCallback(async (uid) => {
+        try {
+            const adminDoc = await getDoc(doc(db, "admins", uid));
+            if (adminDoc.exists()) return true;
+            // Geriye dönük uyumluluk: users tablosunda isAdmin flag kontrolü
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists() && userDoc.data().isAdmin === true) return true;
+            return false;
+        } catch (err) {
+            console.error("Admin check error:", err);
+            return false;
         }
+    }, []);
 
+    const register = useCallback(async (email, password, displayName, userType) => {
         const result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName });
 
         // Base user data
         const userData = {
-            roles: [userType],
+            roles: [userType], // Multi-role support
             displayName,
             email,
             photoURL: "",
-            disabled: false,
-            createdAt: serverTimestamp(),
+            createdAt: new Date().toISOString(),
         };
 
         await setDoc(doc(db, "users", result.user.uid), userData);
@@ -119,80 +88,17 @@ export function AuthProvider({ children }) {
         }
 
         return result;
-    }
+    }, []);
 
-    async function login(email, password, selectedType) {
+    const login = useCallback(async (email, password, selectedType) => {
         const result = await signInWithEmailAndPassword(auth, email, password);
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
 
         if (!userDoc.exists()) {
-            // Check if it's a pending restoration
-            const reqSnap = await getDoc(doc(db, "restorationRequests", result.user.uid));
-            if (reqSnap.exists()) {
-                await signOut(auth);
-                throw new Error("Hesabınız henüz onaylanmadı. Lütfen yönetici onayını bekleyin.");
-            }
-
-            // Check if it's in the Shadow-Vault (deletedAccounts)
-            const archiveSnap = await getDoc(doc(db, "deletedAccounts", email));
-            if (archiveSnap.exists()) {
-                const archiveData = archiveSnap.data();
-                
-                // Trigger restoration request automatically on login attempt
-                await setDoc(doc(db, "restorationRequests", result.user.uid), {
-                    email,
-                    displayName: archiveData.userData.displayName || "Kullanıcı",
-                    newUid: result.user.uid,
-                    requestedAt: serverTimestamp(),
-                    status: "pending"
-                });
-
-                // Notify admin via EmailJS
-                try {
-                    await emailjs.send("service_wupm5uc", "template_kvsc4vm", {
-                        to_email: "berattopaloglu61@gmail.com",
-                        to_name: "Kurucu",
-                        message: `SİSTEM UYARISI: Arşivlenmiş bir kullanıcı (${email}) giriş yapmaya çalıştı ve otomatik Geri Yükleme Talebi oluşturuldu. Lütfen paneli kontrol edin.`
-                    }, "NPz_h8os1UzhSm7Q2");
-                } catch (e) { console.error("Admin notify error:", e); }
-
-                await signOut(auth);
-                throw new Error("Bu hesap daha önce silinmiş. Hesabınızın geri yüklenmesi için yöneticiye talep gönderildi. Lütfen onay bekleyin.");
-            }
-
             throw new Error("Kullanıcı kaydı bulunamadı.");
         }
 
         const data = userDoc.data();
-        if (data.status === "purged") {
-            // It's a banished account (Shadow Deleted)
-            const reqSnap = await getDoc(doc(db, "restorationRequests", result.user.uid));
-            if (!reqSnap.exists()) {
-                // Auto-create request if they try to login
-                await setDoc(doc(db, "restorationRequests", result.user.uid), {
-                    email,
-                    displayName: data.displayName || "Kullanıcı",
-                    newUid: result.user.uid,
-                    requestedAt: serverTimestamp(),
-                    status: "pending"
-                });
-                try {
-                    await emailjs.send("service_wupm5uc", "template_kvsc4vm", {
-                        to_email: "berattopaloglu61@gmail.com",
-                        to_name: "Kurucu",
-                        message: `SİSTEM UYARISI: Arşivlenmiş bir kullanıcı (${email}) giriş yapmaya çalıştı ve otomatik Geri Yükleme Talebi oluşturuldu.`
-                    }, "NPz_h8os1UzhSm7Q2");
-                } catch (e) {}
-            }
-            await signOut(auth);
-            throw new Error("Hesabınız yönetim kurulu kararıyla siber arşive taşınmıştır. Geri yükleme talebi admin onayına sunuldu.");
-        }
-
-        if (data.disabled) {
-            await signOut(auth);
-            throw new Error("Hesabınız geçici olarak devre dışı bırakılmıştır. Lütfen yönetici ile iletişime geçin.");
-        }
-
         if (!data.roles?.includes(selectedType)) {
             throw new Error(`Bu hesapta ${selectedType === 'student' ? 'Öğrenci' : 'Şirket'} profili bulunmuyor.`);
         }
@@ -201,9 +107,9 @@ export function AuthProvider({ children }) {
         setCurrentUser(result.user);
         await loadUserProfile(result.user.uid, selectedType);
         return result;
-    }
+    }, []);
 
-    async function loginWithGoogle(selectedType) {
+    const loginWithGoogle = useCallback(async (selectedType) => {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
         const userDoc = await getDoc(doc(db, "users", result.user.uid));
@@ -284,42 +190,44 @@ export function AuthProvider({ children }) {
 
         await loadUserProfile(result.user.uid, selectedType);
         return result;
-    }
+    }, []);
 
 
-    async function loadUserProfile(uid, type) {
+    const loadUserProfile = useCallback(async (uid, type) => {
         const userDoc = await getDoc(doc(db, "users", uid));
         if (userDoc.exists()) {
             const userData = userDoc.data();
             const roleCollection = type === "student" ? "students" : "companies";
             const roleDoc = await getDoc(doc(db, roleCollection, uid));
             
+            // Firestore tabanlı admin kontrolü
+            const adminStatus = await checkIsAdmin(uid);
+
             setUserProfile({
                 ...userData,
                 type, // Currently active role
-                isAdmin: userData.email === "berattopaloglu61@gmail.com",
+                isAdmin: adminStatus,
                 profileData: roleDoc.exists() ? roleDoc.data() : null
             });
 
             // Persist role choice for session
             localStorage.setItem("activeRole", type);
         }
-    }
+    }, [checkIsAdmin]);
 
-    function logout() {
+    const logout = useCallback(() => {
         localStorage.removeItem("activeRole");
         return signOut(auth);
-    }
+    }, []);
 
-    async function updateDisplayName(newName) {
+    const updateDisplayName = useCallback(async (newName) => {
         if (!currentUser) return;
         await updateProfile(auth.currentUser, { displayName: newName });
         await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName });
-        // Update local state if needed, though onAuthStateChanged might pick it up
         setCurrentUser({ ...auth.currentUser });
-    }
+    }, [currentUser]);
 
-    async function reloadUser() {
+    const reloadUser = useCallback(async () => {
         if (auth.currentUser) {
             await auth.currentUser.reload();
             const isVerified = auth.currentUser.emailVerified;
@@ -327,19 +235,18 @@ export function AuthProvider({ children }) {
             return isVerified;
         }
         return false;
-    }
+    }, []);
 
-    function resetPassword(email) {
+    const resetPassword = useCallback((email) => {
         const currentOrigin = window.location.origin;
 
         return sendPasswordResetEmail(auth, email, {
             url: `${currentOrigin}/auth/action`,
             handleCodeInApp: true
         });
-    }
+    }, []);
 
     useEffect(() => {
-        let userUnsub = null;
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             try {
                 setCurrentUser(user);
@@ -356,21 +263,8 @@ export function AuthProvider({ children }) {
                             await loadUserProfile(user.uid, initialRole);
                         }
                     }
-                    
-                    // Real-time Check: If account is completely deleted, disabled or purged (Shadow Deleted)
-                    userUnsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-                        const data = docSnap.data();
-                        if (!docSnap.exists() || data?.disabled || data?.status === 'purged') {
-                            logout();
-                            window.location.href = "/";
-                        }
-                    });
                 } else {
                     setUserProfile(null);
-                    if (userUnsub) {
-                        userUnsub();
-                        userUnsub = null;
-                    }
                 }
             } catch (err) {
                 console.error("Auth state change error:", err);
@@ -378,13 +272,11 @@ export function AuthProvider({ children }) {
                 setLoading(false);
             }
         });
-        return () => {
-            unsubscribe();
-            if (userUnsub) userUnsub();
-        };
-    }, []);
+        return unsubscribe;
+    }, [loadUserProfile]);
 
-    const value = {
+    // useMemo ile context value optimizasyonu — gereksiz re-render'ları önler
+    const value = useMemo(() => ({
         currentUser,
         userProfile,
         isAdmin: userProfile?.isAdmin || false,
@@ -396,7 +288,7 @@ export function AuthProvider({ children }) {
         resetPassword,
         updateDisplayName,
         reloadUser,
-    };
+    }), [currentUser, userProfile, systemSettings, register, login, loginWithGoogle, logout, resetPassword, updateDisplayName, reloadUser]);
 
     return (
         <AuthContext.Provider value={value}>

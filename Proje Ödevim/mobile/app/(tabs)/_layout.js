@@ -3,15 +3,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../src/context/AuthContext";
 
 export default function TabLayout() {
-    const { userProfile } = useAuth();
-    const isStudent = userProfile?.type === "student";
+    const { activeRole } = useAuth();
+    const isStudent = activeRole === "student";
 
     return (
         <Tabs
             screenOptions={{
                 tabBarActiveTintColor: "#6366f1",
                 tabBarInactiveTintColor: "#94a3b8",
-                tabBarHideOnKeyboard: true,
                 tabBarStyle: {
                     backgroundColor: "#16213e",
                     borderTopColor: "#1e2a45",
@@ -56,20 +55,16 @@ export default function TabLayout() {
                 options={{
                     title: "Mesajlar",
                     tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="forum" color={color} size={size} />
+                        <MaterialCommunityIcons name="chat-bubble" color={color} size={size} />
                     ),
                 }}
             />
             <Tabs.Screen
                 name="profile"
                 options={{
-                    title: userProfile ? "Profil" : "Giriş Yap",
+                    title: "Profil",
                     tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons 
-                            name={userProfile ? "account" : "login"} 
-                            color={color} 
-                            size={size} 
-                        />
+                        <MaterialCommunityIcons name="account" color={color} size={size} />
                     ),
                 }}
             />

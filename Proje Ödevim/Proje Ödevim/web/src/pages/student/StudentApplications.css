@@ -1,0 +1,130 @@
+.filter-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.filter-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-tab {
+    padding: 10px 20px;
+    border-radius: var(--radius-full);
+    background: rgba(var(--bg-card-rgb), 0.4);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-tab:hover {
+    background: rgba(var(--primary-rgb), 0.1);
+    border-color: var(--primary-light);
+    color: var(--text-primary);
+}
+
+.filter-tab.active {
+    background: var(--gradient-primary);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.4);
+}
+
+.tab-count {
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 11px;
+}
+
+.filter-tab.active .tab-count {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.app-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    gap: 20px;
+}
+
+.app-card-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.app-company-logo {
+    font-size: 20px;
+    box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.2);
+}
+
+.app-card-info {
+    flex: 1;
+}
+
+.app-card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.app-card-company {
+    color: var(--primary-light);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.app-card-date {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.app-card-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .dashboard-welcome {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 20px;
+    }
+
+    .app-card {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .app-card-left {
+        flex-direction: column;
+    }
+
+    .app-card-right {
+        align-items: center;
+        border-top: 1px solid var(--border);
+        padding-top: 16px;
+    }
+
+    .app-card-right .btn {
+        width: 100%;
+    }
+}

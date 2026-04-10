@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView } from "react-native";
+import { View, StyleSheet, FlatList } from "react-native";
 import { Text, Surface, Avatar, IconButton, Button, Card, Divider, ActivityIndicator } from "react-native-paper";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
@@ -7,6 +7,7 @@ import { db } from "../../src/firebase/config";
 
 export default function ApplicantsScreen() {
     const { jobId } = useLocalSearchParams();
+    const resolvedJobId = Array.isArray(jobId) ? jobId[0] : jobId;
     const [job, setJob] = useState(null);
     const [applicants, setApplicants] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -16,12 +17,13 @@ export default function ApplicantsScreen() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const jobSnap = await getDoc(doc(db, "jobs", jobId));
+                if (!resolvedJobId) return;
+                const jobSnap = await getDoc(doc(db, "jobs", resolvedJobId));
                 if (jobSnap.exists()) {
                     setJob({ id: jobSnap.id, ...jobSnap.data() });
                 }
 
-                const q = query(collection(db, "applications"), where("jobId", "==", jobId));
+                const q = query(collection(db, "applications"), where("jobId", "==", resolvedJobId));
                 const snap = await getDocs(q);
                 setApplicants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (err) {
@@ -31,13 +33,13 @@ export default function ApplicantsScreen() {
             }
         };
         fetchData();
-    }, [jobId]);
+    }, [resolvedJobId]);
 
     const updateStatus = async (appId, newStatus) => {
         setUpdating(appId);
         try {
             await updateDoc(doc(db, "applications", appId), { status: newStatus });
-            setApplicants(applicants.map(a => a.id === appId ? { ...a, status: newStatus } : a));
+            setApplicants(prev => prev.map(a => a.id === appId ? { ...a, status: newStatus } : a));
         } catch (err) {
             console.error("Update status error:", err);
         } finally {

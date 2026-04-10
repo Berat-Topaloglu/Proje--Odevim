@@ -68,28 +68,18 @@ export default function CompanyJobs() {
         const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz? İlanla birlikte TÜM başvurular da yok edilecektir.", "Kritik İşlem");
         if (!confirmed) return;
         try {
-            // 1. İlana ait tüm başvuruları temizle
-            const appQ = query(collection(db, "applications"), where("jobId", "==", jobId));
-            const appSnap = await getDocs(appQ);
-            await Promise.all(appSnap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id))));
-
-            // 2. İlana ait tüm sohbetleri ve mesajları temizle
-            const chatQ = query(collection(db, "chats"), where("jobId", "==", jobId));
-            const chatSnap = await getDocs(chatQ);
+            // Cascade Delete: Applications
+            const q = query(collection(db, "applications"), where("jobId", "==", jobId));
+            const snap = await getDocs(q);
             
-            await Promise.all(chatSnap.docs.map(async (chatDoc) => {
-                const chatId = chatDoc.id;
-                const msgQ = query(collection(db, "chats", chatId, "messages"));
-                const msgSnap = await getDocs(msgQ);
-                await Promise.all(msgSnap.docs.map(m => deleteDoc(doc(db, "chats", chatId, "messages", m.id))));
-                await deleteDoc(doc(db, "chats", chatId));
-            }));
+            const deletePromises = snap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id)));
+            await Promise.all(deletePromises);
 
-            // 3. İlanı sil
+            // Delete the job
             await deleteDoc(doc(db, "jobs", jobId));
             
             setJobs(jobs.filter(j => j.id !== jobId));
-            showNotification(`${appSnap.size} başvuru ve ilgili tüm diyaloglar temizlendi.`, "success", "Başarılı");
+            showNotification(`${snap.size} başvuru temizlendi ve ilan silindi.`, "success", "Başarılı");
         } catch (err) {
             console.error("İlan silinemedi:", err);
             showNotification("İlan imha edilirken bir hata oluştu.", "error", "Hata");
@@ -129,20 +119,22 @@ export default function CompanyJobs() {
                         {jobs.map(job => (
                             <div key={job.id} className="job-manage-card card">
                                 <div className="job-manage-info">
-                                    <h3 className="job-manage-title">{job.title}</h3>
-                                    <div className="job-manage-meta">
-                                        <span><MapPin size={14} /> {job.location}</span>
-                                        <span><Clock size={14} /> {job.duration} ay</span>
-                                        <span><Calendar size={14} /> {(() => {
-                                            const d = job.createdAt?.toMillis ? new Date(job.createdAt.toMillis()) : (job.createdAt ? new Date(job.createdAt) : null);
-                                            return d && !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : "Bilinmiyor";
-                                        })()}</span>
+                                    <div className="job-manage-header">
+                                        <h3 className="job-manage-title">{job.title}</h3>
                                     </div>
                                     <div className="job-manage-badges">
                                         <span className={`badge badge-${job.status === "active" ? "success" : "muted"}`}>
                                             {job.status === "active" ? "Aktif" : "Kapalı"}
                                         </span>
                                         <span className="badge badge-info">{job.type === "remote" ? "Uzaktan" : job.type === "hybrid" ? "Hibrit" : "Ofis"}</span>
+                                    </div>
+                                    <div className="job-manage-meta">
+                                        <span><MapPin size={16} color="var(--primary-light)" /> {job.location}</span>
+                                        <span><Clock size={16} color="var(--secondary)" /> {job.duration} ay</span>
+                                        <span><Calendar size={16} color="var(--text-muted)" /> {(() => {
+                                            const d = job.createdAt?.toMillis ? new Date(job.createdAt.toMillis()) : (job.createdAt ? new Date(job.createdAt) : null);
+                                            return d && !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : "Bilinmiyor";
+                                        })()}</span>
                                     </div>
                                 </div>
                                 <div className="job-manage-actions">

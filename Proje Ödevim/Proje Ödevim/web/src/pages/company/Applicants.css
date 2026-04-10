@@ -1,0 +1,127 @@
+.applicants-header {
+    margin-bottom: 24px;
+}
+
+.applicants-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.applicants-count {
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
+.applicant-card {
+    margin-bottom: 16px;
+}
+
+.applicant-info {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.applicant-avatar {
+    background: var(--gradient-primary);
+    color: white;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.applicant-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.applicant-email {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.applicant-message {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+
+.cover-letter-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-top: 4px;
+}
+
+.applicant-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.status-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    .applicant-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .status-buttons {
+        flex-direction: column;
+    }
+}
+
+.view-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 500px;
+}
+
+.rating-input {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.rating-display {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}

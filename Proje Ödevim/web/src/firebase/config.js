@@ -1,6 +1,5 @@
 // Firebase Yapılandırması
-// ÖNEMLİ: Bu bilgileri Firebase Console'dan alarak buraya yapıştırın
-// https://console.firebase.google.com → Proje Ayarları → Web Uygulaması Ekle
+// Environment variable'lardan okunur (.env dosyasından)
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
@@ -8,12 +7,12 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDZUU2y6RrpUceSGQJKxRtqsNGJVT-31Sk",
-  authDomain: "proje-odevim-1b12c.firebaseapp.com",
-  projectId: "proje-odevim-1b12c",
-  storageBucket: "proje-odevim-1b12c.firebasestorage.app",
-  messagingSenderId: "550310950985",
-  appId: "1:550310950985:web:d38efda308a831fd7c6798"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);

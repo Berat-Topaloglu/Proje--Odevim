@@ -10,29 +10,38 @@ export const CLOUDINARY_CONFIG = {
  * @param {File} file - Yüklenecek dosya
  * @returns {Promise<string>} - Yüklenen dosyanın URL'si
  */
-export const uploadToCloudinary = async (file) => {
+export const uploadToCloudinary = async (file, resourceType = "auto") => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", CLOUDINARY_CONFIG.uploadPreset);
     formData.append("cloud_name", CLOUDINARY_CONFIG.cloudName);
 
-    // PDF ve diğer dökümanlar için 'raw' veya 'image' yerine 'auto' kullanıyoruz
-    // Ancak Cloudinary'nin PDF'i 'image' olarak algılaması önizleme için bazen daha iyidir.
-    const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-
     try {
-        const response = await fetch(CLOUDINARY_CONFIG.uploadUrl, {
+        // PDF'ler için 'image' resource_type kullanmak, Cloudinary'nin önizleme sunmasını sağlar.
+        // Ancak 'auto' genellikle en güvenlisidir. 
+        const response = await fetch(CLOUDINARY_CONFIG.uploadUrl.replace("/auto/", `/${resourceType}/`), {
             method: "POST",
             body: formData,
         });
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.error("Cloudinary error details:", errorData);
             throw new Error(errorData.error?.message || "Cloudinary yükleme hatası");
         }
 
         const data = await response.json();
-        return data.secure_url;
+        let url = data.secure_url;
+
+        // PDF dosyaları için tarayıcı önizlemesini zorlamak adına URL manipülasyonu
+        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+            // Eğer URL'de uzantı yoksa ekle veya Cloudinary viewer'ı tetikle
+            if (!url.toLowerCase().endsWith(".pdf")) {
+                url = url.replace(/\/v\d+\//, "$&").replace(/upload\//, "upload/fl_attachment:false/");
+            }
+        }
+
+        return url;
     } catch (err) {
         console.error("Cloudinary upload error:", err);
         throw err;

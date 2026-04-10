@@ -1,119 +1,105 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { ClipboardCheck, Clock, CheckCircle2, XCircle, Eye, Inbox } from "lucide-react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { 
+    ClipboardCheck, 
+    Clock, 
+    CheckCircle2, 
+    XCircle, 
+    Eye, 
+    Inbox, 
+    LayoutGrid, 
+    ShieldCheck, 
+    AlertCircle,
+    ArrowRightCircle,
+    Search
+} from "lucide-react";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
-import "../student/Dashboard.css";
 import "./StudentApplications.css";
 
-const STATUS_INFO = {
-    pending: { label: "Beklemede", color: "warning", icon: <Clock size={16} /> },
-    reviewing: { label: "İncelenen", color: "info", icon: <Eye size={16} /> },
-    accepted: { label: "Kabul", color: "success", icon: <CheckCircle2 size={16} /> },
-    rejected: { label: "Reddedilen", color: "danger", icon: <XCircle size={16} /> },
-};
+const BOARD_STEPS = [
+    { key: "pending", label: "Beklemede", icon: <Clock size={14} />, color: "#f59e0b" },
+    { key: "reviewing", label: "İncelemede", icon: <Eye size={14} />, color: "#6366f1" },
+    { key: "accepted", label: "Sonuçlandı", icon: <CheckCircle2 size={14} />, color: "#10b981" }
+];
 
 export default function StudentApplications() {
     const { currentUser } = useAuth();
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("all");
-    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!currentUser) return;
-
         let unsubscribe = () => { };
         try {
-            const q = query(
-                collection(db, "applications"),
-                where("studentId", "==", currentUser.uid)
-            );
-
+            const q = query(collection(db, "applications"), where("studentId", "==", currentUser.uid));
             unsubscribe = onSnapshot(q, (snap) => {
-                try {
-                    const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                    // Safler memory sort (Kritik: Hata korumalı)
-                    apps.sort((a, b) => {
-                        const getMs = (val) => {
-                            if (!val) return 0;
-                            if (val.toMillis) return val.toMillis();
-                            const d = new Date(val).getTime();
-                            return isNaN(d) ? 0 : d;
-                        };
-                        return getMs(b.createdAt) - getMs(a.createdAt);
-                    });
-
-                    setApplications(apps);
-                    setLoading(false);
-                    setError(null);
-                } catch (err) {
-                    console.error("Veri işleme hatası:", err);
-                    setError("Başvurular işlenirken bir sorun oluştu.");
-                    setLoading(false);
-                }
-            }, (err) => {
-                console.error("Firebase dinleme hatası:", err);
-                setError("Başvurular alınamadı. Bağlantınızı kontrol edin.");
+                const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                apps.sort((a, b) => {
+                    const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt).getTime();
+                    const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime();
+                    return timeB - timeA;
+                });
+                setApplications(apps);
                 setLoading(false);
             });
-        } catch (err) {
-            console.error("Başlatma hatası:", err);
-            setError("Sistem başlatılamadı.");
-            setLoading(false);
-        }
-
+        } catch (err) { console.error(err); setLoading(false); }
         return () => unsubscribe();
     }, [currentUser]);
 
     const filtered = applications.filter(a => filter === "all" || a.status === filter);
 
+    const getProgressIndex = (status) => {
+        if (status === "pending") return 0;
+        if (status === "reviewing") return 1;
+        if (status === "accepted" || status === "rejected") return 2;
+        return 0;
+    };
+
     if (loading) return (
-        <div className="page-wrapper">
-            <div className="content-wrapper">
-                <div className="dashboard-welcome">
-                    <h1 className="dashboard-title">⌛ Yükleniyor...</h1>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 16 }} />)}
+        <div className="page-wrapper" style={{ paddingTop: 100 }}>
+            <div className="content-wrapper skeleton-loading">
+                <div className="skeleton" style={{ height: 200, borderRadius: 24, marginBottom: 40 }} />
+                <div className="apps-grid-omega">
+                    {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 300, borderRadius: 24 }} />)}
                 </div>
             </div>
         </div>
     );
 
     return (
-        <div className="page-wrapper">
-            <div className="content-wrapper page-enter">
-                <div className="dashboard-welcome">
-                    <div>
-                        <h1 className="dashboard-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <ClipboardCheck size={32} color="var(--primary)" /> Başvurularım
-                        </h1>
-                        <p className="dashboard-subtitle">{applications.length} toplam başvuru</p>
+        <div className="page-wrapper" style={{ paddingTop: 'calc(var(--navbar-height) + 24px)' }}>
+            <div className="content-wrapper apps-board-container">
+                
+                {/* OMEGA HEADER */}
+                <header className="apps-header-omega">
+                    <div className="header-left-pro">
+                        <h1><LayoutGrid size={32} style={{ verticalAlign: 'middle', marginRight: 12, color: 'var(--primary)' }} /> Operasyon Panosu</h1>
+                        <p>{applications.length} Aktif Sinyal İzleniyor</p>
                     </div>
-                    <Link to="/jobs" className="btn btn-primary">🔍 Yeni İlan Ara</Link>
-                </div>
+                    <Link to="/jobs" className="btn btn-primary" style={{ padding: '16px 32px', borderRadius: 'var(--radius-full)' }}>
+                        <Search size={18} style={{ marginRight: 8 }} /> Yeni Görev Ara
+                    </Link>
+                </header>
 
-                {error && <div className="alert alert-error mb-24">{error}</div>}
-
-                {/* Filter Tabs */}
-                <div className="filter-tabs">
+                {/* FILTER CONTROLLER */}
+                <div className="apps-filter-bar">
                     {[
-                        { key: "all", label: "Tümü" },
-                        { key: "pending", label: "Bekleyen" },
-                        { key: "reviewing", label: "İncelenen" },
-                        { key: "accepted", label: "Kabul" },
-                        { key: "rejected", label: "Reddedilen" },
+                        { key: "all", label: "TÜMÜ", icon: <Inbox size={14}/> },
+                        { key: "pending", label: "BEKLEYEN", icon: <Clock size={14}/> },
+                        { key: "reviewing", label: "İNCELENEN", icon: <Eye size={14}/> },
+                        { key: "accepted", label: "KABUL", icon: <ShieldCheck size={14}/> },
+                        { key: "rejected", label: "RET", icon: <AlertCircle size={14}/> }
                     ].map(t => (
                         <button
                             key={t.key}
-                            className={`filter-tab ${filter === t.key ? "active" : ""}`}
+                            className={`filter-btn-pro ${filter === t.key ? "active" : ""}`}
                             onClick={() => setFilter(t.key)}
                         >
-                            {t.label}
-                            <span className="tab-count">
+                            {t.icon} {t.label} 
+                            <span className="tab-count-pro">
                                 {t.key === "all" ? applications.length : applications.filter(a => a.status === t.key).length}
                             </span>
                         </button>
@@ -121,37 +107,50 @@ export default function StudentApplications() {
                 </div>
 
                 {filtered.length === 0 ? (
-                    <div className="empty-state card">
-                        <Inbox size={48} color="var(--secondary)" style={{ opacity: 0.5 }} />
-                        <p>{filter === "all" ? "Henüz başvurun yok" : "Bu kategoride başvuru yok"}</p>
-                        {filter === "all" && <Link to="/jobs" className="btn btn-primary btn-sm mt-16">İlan Ara</Link>}
+                    <div className="empty-omega-pro">
+                        <Inbox size={64} style={{ opacity: 0.2, marginBottom: 24 }} />
+                        <h3>İletişim Kesildi</h3>
+                        <p>Henüz bu frekansta yakalanan bir başvuru sinyali yok.</p>
+                        <Link to="/jobs" className="btn btn-primary mt-24">Taramaya Başla</Link>
                     </div>
                 ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div className="apps-grid-omega">
                         {filtered.map(app => {
-                            const s = STATUS_INFO[app.status] || STATUS_INFO.pending;
-                            const createdDate = app.createdAt?.toMillis ? new Date(app.createdAt.toMillis()) : (app.createdAt ? new Date(app.createdAt) : null);
+                            const pIndex = getProgressIndex(app.status);
+                            const isRejected = app.status === "rejected";
+                            const createdDate = app.createdAt?.toMillis ? new Date(app.createdAt.toMillis()) : new Date(app.createdAt);
 
                             return (
-                                <div key={app.id} className="app-card card">
-                                    <div className="app-card-left">
-                                        <div className="avatar avatar-md app-company-logo">
+                                <div key={app.id} className={`app-card-omega ${isRejected ? 'rejected-glow' : ''}`}>
+                                    <div className="card-top-omega">
+                                        <div className="logo-box-omega">
                                             {app.companyName?.charAt(0)}
                                         </div>
-                                        <div className="app-card-info">
-                                            <h3 className="app-card-title">{app.jobTitle}</h3>
-                                            <p className="app-card-company">{app.companyName}</p>
-                                            {createdDate && !isNaN(createdDate.getTime()) && (
-                                                <p className="app-card-date">
-                                                    {createdDate.toLocaleDateString("tr-TR")}
-                                                </p>
-                                            )}
+                                        <div className="title-box-omega">
+                                            <h3>{app.jobTitle}</h3>
+                                            <p>{app.companyName}</p>
                                         </div>
                                     </div>
-                                    <div className="app-card-right">
-                                        <span className={`badge badge-${s.color}`}>{s.icon} {s.label}</span>
-                                        <Link to={`/jobs/${app.jobId}`} className="btn btn-secondary btn-sm">
-                                            İlanı Gör
+
+                                    {/* OMEGA STEPPER */}
+                                    <div className="app-stepper">
+                                        {BOARD_STEPS.map((step, idx) => (
+                                            <div key={idx} className={`step-omega ${pIndex >= idx ? 'active' : ''}`} 
+                                                 style={pIndex >= idx ? { borderColor: step.color, background: pIndex === idx ? step.color : '' } : {}}>
+                                                {isRejected && idx === 2 ? <XCircle size={14} color="#ef4444" /> : step.icon}
+                                                <span className="step-label-pro" style={pIndex >= idx ? { color: step.color, opacity: 1 } : {}}>
+                                                    {isRejected && idx === 2 ? "REDDEDİLDİ" : step.label}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="app-footer-omega">
+                                        <span className="app-date-pro">
+                                            {createdDate.toLocaleDateString("tr-TR")} • {app.location || "İstanbul"}
+                                        </span>
+                                        <Link to={`/jobs/${app.jobId}`} className="btn-view-pro">
+                                            MİSYON DETAYI <ArrowRightCircle size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
                                         </Link>
                                     </div>
                                 </div>
@@ -163,3 +162,4 @@ export default function StudentApplications() {
         </div>
     );
 }
+

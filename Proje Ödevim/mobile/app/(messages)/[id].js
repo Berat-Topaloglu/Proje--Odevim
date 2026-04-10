@@ -7,14 +7,16 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, u
 import { db } from "../../src/firebase/config";
 
 export default function ChatDetailScreen() {
-    const { id: chatId } = useLocalSearchParams();
-    const { currentUser, isAdmin } = useAuth();
+    const { id } = useLocalSearchParams();
+    const { currentUser } = useAuth();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [chatInfo, setChatInfo] = useState(null);
     const flatListRef = useRef(null);
     const router = useRouter();
+
+    const chatId = Array.isArray(id) ? id[0] : id;
 
     useEffect(() => {
         if (!chatId || !currentUser) return;
@@ -30,14 +32,12 @@ export default function ChatDetailScreen() {
         // Mesajları dinle
         const q = query(
             collection(db, `chats/${chatId}/messages`),
+            orderBy("createdAt", "asc"),
             limit(100)
         );
 
         const unsubMsgs = onSnapshot(q, (snap) => {
-            const msgData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            // Memory sort (A-Z - asc)
-            msgData.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
-            setMessages(msgData);
+            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
         }, (err) => {
             console.error("Messages list error:", err);
@@ -113,7 +113,6 @@ export default function ChatDetailScreen() {
                 contentContainerStyle={styles.listContent}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             />
-
             <View style={styles.inputContainer}>
                 <TextInput
                     placeholder="Mesajınızı yazın..."
@@ -229,3 +228,13 @@ const styles = StyleSheet.create({
         marginRight: 10,
     },
 });
+
+
+
+
+
+
+
+
+
+

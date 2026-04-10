@@ -18,10 +18,14 @@ if (db) {
                     return match ? new RegExp(match[1], match[2]) : new RegExp(p, "i");
                 } catch (e) { return null; }
             }).filter(Boolean);
-            console.log("Dinamik yasaklı kelime listesi güncellendi.");
+            if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+                console.info("Dinamik yasaklı kelime listesi güncellendi.");
+            }
         }
     });
-}export const FORBIDDEN_WORDS = [
+}
+
+export const FORBIDDEN_WORDS = [
   // ================================================================
   // 🇹🇷 TÜRKÇE KÜFÜRLER — ANA FORMLAR
   // ================================================================
@@ -333,6 +337,7 @@ export function normalizeText(text) {
   if (!text) return "";
   return text
     .toLowerCase()
+    .replace(/\u0307/g, "") // dotted-i combining mark
     .replace(/[\u200b\u200c\u200d\u00ad\ufeff]/g, "") // invisible chars
     .replace(/[àáâãäå]/g, "a")
     .replace(/[èéêë]/g, "e")
@@ -341,6 +346,10 @@ export function normalizeText(text) {
     .replace(/[ùúûü]/g, "u")
     .replace(/[ýÿ]/g, "y")
     .replace(/[ñ]/g, "n")
+    .replace(/[ç]/g, "c")
+    .replace(/[ğ]/g, "g")
+    .replace(/[ş]/g, "s")
+    .replace(/[ı]/g, "i")
     .replace(/[@]/g, "a")
     .replace(/[3]/g, "e")
     .replace(/[0]/g, "o")

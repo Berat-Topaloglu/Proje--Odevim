@@ -1,24 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, arrayUnion, query, where, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, arrayUnion, query, where, getDocs, setDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
-import { uploadToCloudinary } from "../utils/cloudinary";
-import { getSafeCvUrl } from "../utils/file_utils";
-import { 
-    Briefcase, Users, GraduationCap, Globe, Calendar, Banknote, 
-    MapPin, Gauge, ShieldCheck, Plane, MousePointer2, 
-    Smartphone, Languages, Clock, Accessibility, UserCircle2, 
-    ChevronLeft, Trash2, Send, MessageSquare,
-    FileText, Target, ClipboardList, Rocket, Flag, User
-} from "lucide-react";
+import { ArrowLeft, Star, MapPin, Briefcase, DollarSign, Clock, Calendar, Send, MessageCircle, AlertCircle, Trash2 } from "lucide-react";
 import "./JobDetail.css";
 
-// Demo verileri (Firebase olmadan çalışması için)
 const DEMO_JOBS = {
-    "1": { title: "Frontend Geliştirici Stajyeri", companyName: "TechCorp A.Ş.", sector: "Yazılım", type: "remote", location: "İstanbul", skills: ["React", "JavaScript", "CSS", "HTML"], salary: "", status: "active", createdAt: new Date().toISOString(), description: "TechCorp olarak dinamik ve öğrenmeye açık bir Frontend Geliştirici Stajyeri arıyoruz. React ekosisteminde deneyim kazanmak isteyenler için harika bir fırsat!\n\n**Görev ve Sorumluluklar:**\n- React ile web uygulamaları geliştirme\n- UI/UX tasarımlarını koda dönüştürme\n- Kod gözden geçirme süreçlerine katılım\n- Agile metodoloji ile çalışma\n\n**Aranan Özellikler:**\n- HTML, CSS, JavaScript temeli\n- React bilgisi (temel düzey yeterli)\n- Problem çözme yeteneği\n- Takım çalışmasına yatkınlık", duration: 3, deadline: "2025-06-01", companyId: "comp1" },
-    "2": { title: "UI/UX Tasarım Stajyeri", companyName: "DesignHub", sector: "Tasarım", type: "hybrid", location: "Ankara", skills: ["Figma", "Photoshop", "Adobe XD"], salary: "3500₺/ay", status: "active", createdAt: new Date().toISOString(), description: "DesignHub'da yaratıcı bir UI/UX Tasarım Stajyeri arıyoruz.\n\n**Görevler:**\n- Kullanıcı arayüzü tasarımları\n- Prototip oluşturma\n- Kullanıcı araştırması\n\n**İstenilenler:**\n- Figma deneyimi\n- Tasarım temelleri", duration: 4, deadline: "2025-05-15", companyId: "comp2" },
+    "1": { title: "Frontend Geliştirici Stajyeri", companyName: "TechCorp A.Ş.", sector: "Yazılım", type: "remote", location: "İstanbul", skills: ["React", "JavaScript", "CSS"], salary: "", status: "active", createdAt: new Date().toISOString(), description: "TechCorp olarak dinamik Frontend Geliştirici Stajyeri arıyoruz.\n\n**Görev ve Sorumluluklar:**\n- React ile web uygulamaları geliştirme\n- UI/UX tasarımlarını koda dönüştürme", duration: 3, deadline: "2025-06-01", companyId: "comp1" },
 };
 
 export default function JobDetail() {
@@ -35,8 +25,6 @@ export default function JobDetail() {
     const [applied, setApplied] = useState(false);
     const [coverLetter, setCoverLetter] = useState("");
     const [showApplyModal, setShowApplyModal] = useState(false);
-    const [cvFile, setCvFile] = useState(null);
-    const [portfolioUrl, setPortfolioUrl] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
@@ -70,205 +58,80 @@ export default function JobDetail() {
             try {
                 const q = query(collection(db, "reviews"), where("toId", "==", job.companyId));
                 const snap = await getDocs(q);
-                let total = 0;
-                let count = 0;
-                let currentUserRating = 0;
-
+                let total = 0, count = 0, currentUserRating = 0;
                 snap.forEach(docSnap => {
                     const data = docSnap.data();
-                    if (data.rating) {
-                        total += data.rating;
-                        count++;
-                    }
-                    if (currentUser && data.fromId === currentUser.uid) {
-                        currentUserRating = data.rating || 0;
-                    }
+                    if (data.rating) { total += data.rating; count++; }
+                    if (currentUser && data.fromId === currentUser.uid) currentUserRating = data.rating || 0;
                 });
-
-                if (count > 0) {
-                    setCompanyAvgRating((total / count).toFixed(1));
-                    setCompanyReviewCount(count);
-                }
+                if (count > 0) { setCompanyAvgRating((total / count).toFixed(1)); setCompanyReviewCount(count); }
                 setUserRating(currentUserRating);
-            } catch (err) {
-                console.error("Değerlendirmeler çekilemedi:", err);
-            }
+            } catch (err) { }
         };
         fetchReviews();
     }, [job?.companyId, currentUser]);
 
     const handleApply = async () => {
-        setApplying(true);
-        setError("");
-
-        // Profanity filter for cover letter
+        setApplying(true); setError("");
         const { containsForbiddenContent } = await import("../utils/wordFilter");
         const { isForbidden } = containsForbiddenContent(coverLetter);
 
         if (isForbidden) {
-            showNotification(
-                "Ön yazınız yasaklı kelimeler veya iletişim bilgileri içeriyor. Lütfen kurallara uygun şekilde düzenleyin.",
-                "warning",
-                "⚠️ Uyarı"
-            );
-            setApplying(false);
-            return;
+            showNotification("Ön yazınız yasaklı kelimeler içeriyor.", "warning", "Uyarı");
+            setApplying(false); return;
         }
 
         try {
             const studentName = currentUser.displayName || "Öğrenci";
-            const jobTitle = job.title;
-
-            let applicationCdnUrl = "";
-            if (cvFile) {
-                applicationCdnUrl = await uploadToCloudinary(cvFile);
-            } else if (job.cvRequired) {
-                setError("Bu ilan için Özgeçmiş (CV) yüklemeniz zorunludur.");
-                setApplying(false);
-                return;
-            }
-
-            // 1. Create Application
             await addDoc(collection(db, "applications"), {
-                jobId: id,
-                studentId: currentUser.uid,
-                companyId: job.companyId,
-                coverLetter,
-                cvUrl: applicationCdnUrl,
-                portfolioUrl: portfolioUrl || "",
-                status: "pending",
-                createdAt: serverTimestamp(),
-                jobTitle: jobTitle,
-                companyName: job.companyName,
-                studentName: studentName,
+                jobId: id, studentId: currentUser.uid, companyId: job.companyId,
+                coverLetter, status: "pending", createdAt: serverTimestamp(),
+                jobTitle: job.title, companyName: job.companyName, studentName: studentName,
             });
 
-            // 2. Add to appliedJobs (Using setDoc with merge to avoid 'no document' errors if student doc is incomplete)
-            await setDoc(doc(db, "students", currentUser.uid), {
-                appliedJobs: arrayUnion(id),
-            }, { merge: true });
+            await setDoc(doc(db, "students", currentUser.uid), { appliedJobs: arrayUnion(id) }, { merge: true });
 
-            // 3. Automatic Message to Company (Job Specific)
-            const q = query(
-                collection(db, "chats"),
-                where("participants", "array-contains", currentUser.uid),
-                where("jobId", "==", id)
-            );
+            // Create chat
+            const q = query(collection(db, "chats"), where("participants", "array-contains", currentUser.uid), where("jobId", "==", id));
             const snap = await getDocs(q);
-            let existingChat = snap.docs.find(d => {
-                const data = d.data();
-                return data.participants && data.participants.includes(job.companyId);
-            });
-
-            let chatId;
-            if (existingChat) {
-                chatId = existingChat.id;
-            } else {
-                const chatData = {
-                    participants: [currentUser.uid, job.companyId],
-                    jobId: id,
-                    jobTitle: jobTitle,
-                    participantDetails: [
-                        { id: currentUser.uid, name: studentName },
-                        { id: job.companyId, name: job.companyName || "Şirket" }
-                    ],
-                    lastMessage: "",
-                    lastMessageAt: serverTimestamp(),
-                    createdAt: serverTimestamp()
-                };
-                const chatRef = await addDoc(collection(db, "chats"), chatData);
-                chatId = chatRef.id;
-            }
-
-            const autoMsg = `Merhaba ben ${studentName}, "${jobTitle}" ilanınız için başvurumu yaptım. İşte ön yazım: ${coverLetter || "Belirtilmedi"}`;
+            let existingChat = snap.docs.find(d => d.data().participants?.includes(job.companyId));
             
-            await addDoc(collection(db, `chats/${chatId}/messages`), {
-                senderId: currentUser.uid,
-                text: autoMsg,
-                createdAt: serverTimestamp()
-            });
+            let chatId = existingChat ? existingChat.id : (await addDoc(collection(db, "chats"), {
+                participants: [currentUser.uid, job.companyId], jobId: id, jobTitle: job.title,
+                participantDetails: [{ id: currentUser.uid, name: studentName }, { id: job.companyId, name: job.companyName }],
+                lastMessage: "", lastMessageAt: serverTimestamp(), createdAt: serverTimestamp()
+            })).id;
 
-            await updateDoc(doc(db, "chats", chatId), {
-                lastMessage: autoMsg,
-                lastMessageAt: serverTimestamp()
-            });
+            const autoMsg = `Merhaba ben ${studentName}, "${job.title}" ilanınız için başvurumu yaptım. İşte ön yazım: ${coverLetter}`;
+            await addDoc(collection(db, `chats/${chatId}/messages`), { senderId: currentUser.uid, text: autoMsg, createdAt: serverTimestamp() });
+            await updateDoc(doc(db, "chats", chatId), { lastMessage: autoMsg, lastMessageAt: serverTimestamp() });
 
-            setApplied(true);
-            setShowApplyModal(false);
-            setSuccess("Başvurunuz ve mesajınız başarıyla gönderildi! 🎉");
+            setApplied(true); setShowApplyModal(false);
+            setSuccess("Başvurunuz başarıyla gönderildi! 🎉");
             setTimeout(() => navigate('/student/dashboard'), 2000);
-        } catch (err) {
-            console.error("Başvuru hatası:", err);
-            setError("Başvuru gerçekleştirilemedi. Lütfen sisteme yeniden giriş yapıp tekrar deneyin.");
-        }
+        } catch (err) { setError("Başvuru yapılamadı."); }
         setApplying(false);
     };
 
     const handleStartChat = async () => {
-        if (!currentUser) {
-            navigate("/login");
-            return;
-        }
-
-        if (!job?.companyId) {
-            setError("Şirket bilgisi eksik olduğu için sohbet başlatılamıyor.");
-            return;
-        }
-
+        if (!currentUser) { navigate("/login"); return; }
+        if (!job?.companyId) { setError("Şirket bilgisi eksik."); return; }
         try {
-            // Check if a chat for THIS SPECIFIC JOB already exists
-            const q = query(
-                collection(db, "chats"),
-                where("participants", "array-contains", currentUser.uid),
-                where("jobId", "==", id)
-            );
+            const q = query(collection(db, "chats"), where("participants", "array-contains", currentUser.uid), where("jobId", "==", id));
             const snap = await getDocs(q);
-            let existingChat = snap.docs.find(d => {
-                const data = d.data();
-                return data.participants && data.participants.includes(job.companyId);
-            });
+            let existingChat = snap.docs.find(d => d.data().participants?.includes(job.companyId));
 
-            if (existingChat) {
-                navigate(`/messages/${existingChat.id}`);
-            } else {
-                // Create a new job-specific chat
-                const chatData = {
-                    participants: [currentUser.uid, job.companyId],
-                    jobId: id,
-                    jobTitle: job.title,
-                    participantDetails: [
-                        { id: currentUser.uid, name: currentUser.displayName || "İsimsiz Kullanıcı" },
-                        { id: job.companyId, name: job.companyName || "Şirket" }
-                    ],
-                    lastMessage: "Merhaba, ilanınızla ilgileniyorum.",
-                    lastMessageAt: serverTimestamp(),
-                    createdAt: serverTimestamp()
-                };
-
-                const chatRef = await addDoc(collection(db, "chats"), chatData);
-
-                // İlk mesajı ekle
-                await addDoc(collection(db, `chats/${chatRef.id}/messages`), {
-                    senderId: currentUser.uid,
-                    text: "Merhaba, ilanınızla ilgileniyorum.",
-                    createdAt: serverTimestamp()
+            if (existingChat) { navigate(`/messages/${existingChat.id}`); } else {
+                const chatRef = await addDoc(collection(db, "chats"), {
+                    participants: [currentUser.uid, job.companyId], jobId: id, jobTitle: job.title,
+                    participantDetails: [{ id: currentUser.uid, name: currentUser.displayName }, { id: job.companyId, name: job.companyName }],
+                    lastMessage: "Merhaba, ilanınızla ilgileniyorum.", lastMessageAt: serverTimestamp(), createdAt: serverTimestamp()
                 });
-
-                // Şirkete anlık bildirim oluştur
-                await addDoc(collection(db, `notifications/${job.companyId}/items`), {
-                    type: "message",
-                    message: `${currentUser.displayName || "Bir öğrenci"} ilanınızla ilgileniyor ve size mesaj gönderdi.`,
-                    link: "/messages",
-                    createdAt: serverTimestamp(),
-                    read: false
-                });
-
+                await addDoc(collection(db, `chats/${chatRef.id}/messages`), { senderId: currentUser.uid, text: "Merhaba, ilanınızla ilgileniyorum.", createdAt: serverTimestamp() });
+                await addDoc(collection(db, `notifications/${job.companyId}/items`), { type: "message", message: `${currentUser.displayName} size mesaj gönderdi.`, link: "/messages", createdAt: serverTimestamp(), read: false });
                 navigate(`/messages/${chatRef.id}`);
             }
-        } catch (err) {
-            console.error("Sohbet hatası:", err);
-            setError("Sohbet başlatılırken bir sorun oluştu. Lütfen tekrar deneyin.");
-        }
+        } catch (err) { setError("Sohbet başlatılamadı."); }
     };
 
     const handleRating = async (ratingValue) => {
@@ -277,505 +140,251 @@ export default function JobDetail() {
         try {
             const reviewId = `${currentUser.uid}_${job.companyId}`;
             const reviewRef = doc(db, "reviews", reviewId);
-            const reviewData = {
-                fromId: currentUser.uid,
-                toId: job.companyId,
-                rating: ratingValue,
-                createdAt: serverTimestamp()
-            };
-            
+            const reviewData = { fromId: currentUser.uid, toId: job.companyId, rating: ratingValue, createdAt: serverTimestamp() };
             const snap = await getDoc(reviewRef);
-            if (snap.exists()) {
-                 await updateDoc(reviewRef, { rating: ratingValue, updatedAt: serverTimestamp() });
-            } else {
-                 await setDoc(reviewRef, reviewData);
-            }
-            
-            setUserRating(ratingValue);
-            setSuccess("Değerlendirmeniz kaydedildi! 🌟");
+            if (snap.exists()) { await updateDoc(reviewRef, { rating: ratingValue, updatedAt: serverTimestamp() }); } 
+            else { await setDoc(reviewRef, reviewData); }
+            setUserRating(ratingValue); setSuccess("Değerlendirmeniz kaydedildi! 🌟");
             setTimeout(() => setSuccess(""), 3000);
-            
-            // Ortalama puanı canlı güncellemek için basit yaklaşım (refetch yerine lokal artış yapmak da seçilebilir)
-        } catch (err) {
-            console.error("Değerlendirme hatası:", err);
-            setError("Değerlendirme kaydedilemedi.");
-        }
+        } catch (err) { setError("Değerlendirme kaydedilemedi."); }
         setSubmittingRating(false);
     };
 
-    const TYPE_LABELS = { remote: "Uzaktan", hybrid: "Hibrit", onsite: "Ofis" };
-    const typeColors = { remote: "success", hybrid: "info", onsite: "warning" };
-
     const handleDeleteJob = async () => {
-        const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve tüm başvurular da silinir.", "İlan Silme");
+        const confirmed = await showConfirm("Bu ilanı silmek istediğinizden emin misiniz?", "İlan Silme");
         if (!confirmed) return;
-        
-        if (!isAdmin) {
-            showNotification("Bu işlemi gerçekleştirmek için yetkiniz bulunmuyor.", "error", "Hata");
-            return;
-        }
-
         setDeleting(true);
-        try {
-            // 1. İlana ait tüm başvuruları temizle
-            const appQ = query(collection(db, "applications"), where("jobId", "==", id));
-            const appSnap = await getDocs(appQ);
-            await Promise.all(appSnap.docs.map(appDoc => deleteDoc(doc(db, "applications", appDoc.id))));
-
-            // 2. İlana ait tüm sohbetleri ve mesajları temizle
-            const chatQ = query(collection(db, "chats"), where("jobId", "==", id));
-            const chatSnap = await getDocs(chatQ);
-            
-            await Promise.all(chatSnap.docs.map(async (chatDoc) => {
-                const chatId = chatDoc.id;
-                const msgQ = query(collection(db, "chats", chatId, "messages"));
-                const msgSnap = await getDocs(msgQ);
-                await Promise.all(msgSnap.docs.map(m => deleteDoc(doc(db, "chats", chatId, "messages", m.id))));
-                await deleteDoc(doc(db, "chats", chatId));
-            }));
-
-            // 3. İlanın kendisini temizle
-            const deleteDocRef = doc(db, "jobs", id);
-            await deleteDoc(deleteDocRef);
-            
-            showNotification(`İlan, ${appSnap.size} başvuru ve tüm mesajlaşmalar tamamen imha edildi.`, "success", "Operasyon Tamam");
-            navigate("/jobs");
-        } catch (err) {
-            console.error("İlan imha edilirken hata:", err);
-            showNotification("İlan imha edilirken bir hata oluştu.", "error", "Hata");
-        }
+        try { await updateDoc(doc(db, "jobs", id), { status: "deleted" }); setSuccess("İlan başarıyla silindi! ✅"); setTimeout(() => navigate("/jobs"), 2000); } 
+        catch (err) { setError("Silme başarısız."); }
         setDeleting(false);
     };
 
-    if (loading) {
-        return (
-            <div className="page-wrapper">
-                <div className="content-wrapper" style={{ maxWidth: 800 }}>
-                    <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
-                </div>
+    if (loading) return (
+        <div className="page-wrapper job-detail-page">
+            <div className="job-hero"><h1 style={{color: 'white', marginTop: 100}}>Yükleniyor...</h1></div>
+        </div>
+    );
+
+    if (!job) return (
+        <div className="page-wrapper job-detail-page">
+            <div className="job-hero">
+                <h1 style={{color: 'white', marginTop: 100, fontSize: 60}}>😕 İlan bulunamadı</h1>
+                <Link to="/jobs" className="btn btn-primary" style={{marginTop: 32}}>İlanlara Dön</Link>
             </div>
-        );
+        </div>
+    );
+
+    const TYPE_LABELS = { remote: "Uzaktan", hybrid: "Hibrit", onsite: "Ofis" };
+
+    const safeDeadline = (() => {
+        if (!job.deadline) return null;
+        let d;
+        if (job.deadline?.toDate) d = job.deadline.toDate();
+        else if (job.deadline?.toMillis) d = new Date(job.deadline.toMillis());
+        else d = new Date(job.deadline);
+        return d && !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : null;
+    })();
+
+    // --- YAPAY ZEKA EŞLEŞME SKORU HESAPLAMA ---
+    const userSkills = userProfile?.profileData?.skills || [];
+    const jobSkills = job?.skills || [];
+    let matchPercentage = 0;
+    
+    if (userSkills.length > 0 && jobSkills.length > 0) {
+        const userSkillsLower = userSkills.map(s => s.toLowerCase());
+        const matched = jobSkills.filter(s => userSkillsLower.includes(s.toLowerCase()));
+        matchPercentage = Math.round((matched.length / jobSkills.length) * 100);
+    } else if (jobSkills.length === 0) {
+        matchPercentage = 100; // İlanın beceri şartı yoksa %100 uyumlu
     }
 
-    if (!job) {
-        return (
-            <div className="page-wrapper">
-                <div className="content-wrapper" style={{ textAlign: "center", paddingTop: 80 }}>
-                    <div style={{ fontSize: 60 }}>😕</div>
-                    <h2 style={{ marginTop: 16, marginBottom: 8 }}>İlan bulunamadı</h2>
-                    <Link to="/jobs" className="btn btn-primary">İlanlara Dön</Link>
-                </div>
-            </div>
-        );
-    }
+    const getMatchColor = (score) => {
+        if (score >= 80) return "var(--success)";
+        if (score >= 50) return "var(--warning)";
+        return "var(--danger)";
+    };
 
     return (
-        <div className="page-wrapper">
-            <div className="content-wrapper page-enter" style={{ maxWidth: 800 }}>
-                <Link to="/jobs" className="back-link">← İlanlara Dön</Link>
+        <div className="page-wrapper job-detail-page page-enter">
+            {/* HERO BAR */}
+            <div className="job-hero">
+                <Link to="/jobs" className="back-link-hero"><ArrowLeft size={16}/> İlanlara Dön</Link>
+                <div className="job-hero-content">
+                    <div className="job-hero-logo">
+                        {job.companyLogo ? <img src={job.companyLogo} alt={job.companyName} /> : (job.companyName[0] || "?").toUpperCase()}
+                    </div>
+                    <h1 className="job-hero-title">{job.title}</h1>
+                    <div className="job-hero-company">
+                        {job.companyName}
+                        <div className="job-hero-rating">
+                            <Star size={16} fill="#fbbf24" color="#fbbf24"/> {companyAvgRating > 0 ? companyAvgRating : "Yeni"} 
+                            <span style={{color: 'var(--text-muted)'}}>({companyReviewCount})</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                {success && <div className="alert alert-success mt-16">{success}</div>}
-                {error && <div className="alert alert-error mt-16">{error}</div>}
+            {/* MAIN GRID */}
+            <div className="job-detail-grid">
+                
+                {/* LEFT: Content */}
+                <div className="job-content-main">
+                    {success && <div className="alert alert-success">{success}</div>}
+                    {error && <div className="alert alert-danger">{error}</div>}
 
-                {/* Job Header */}
-                <div className="job-detail-header card">
-                    <div className="job-detail-logo avatar avatar-xl">
-                        {job.companyLogo ? (
-                            <img src={job.companyLogo} alt={job.companyName} />
-                        ) : (
-                            (job.companyName || "?")
-                                .split(" ")
-                                .filter(Boolean)
-                                .map((n) => n[0])
-                                .join("")
-                                .toUpperCase()
-                                .slice(0, 2)
+                    <div className="job-glass-panel">
+                        <h2 className="section-title"><Briefcase size={24} color="var(--primary)"/> İlan Açıklaması</h2>
+                        <div className="job-description-text">
+                            {(job.description || "Detaylı açıklama bulunmuyor.").split("\n").map((line, i) => (
+                                <p key={i}>{line}</p>
+                            ))}
+                        </div>
+                    </div>
+
+                    {(job.skills || []).length > 0 && (
+                        <div className="job-glass-panel">
+                            <h2 className="section-title"><Star size={24} color="var(--warning)"/> İstenen Beceriler</h2>
+                            <div className="job-skills-list">
+                                {job.skills.map((s) => <span key={s} className="skill-tag">{s}</span>)}
+                            </div>
+                        </div>
+                    )}
+
+                    {currentUser && userProfile?.type === "student" && (
+                        <div className="job-glass-panel" style={{textAlign: 'center'}}>
+                            <h2 className="section-title" style={{justifyContent: 'center'}}><Star size={24} color="#fbbf24"/> Şirketi Değerlendir</h2>
+                            <p style={{color: 'var(--text-secondary)', marginBottom: 24}}>Eğer bu şirketle deneyiminiz olduysa başkalarına fikir verin.</p>
+                            <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <span 
+                                        key={star} onClick={() => handleRating(star)} onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}
+                                        style={{ cursor: submittingRating ? 'wait' : 'pointer', fontSize: 48, color: star <= (hoverRating || userRating) ? '#fbbf24' : '#475569', transition: 'color 0.2s', userSelect: 'none' }}
+                                    >★</span>
+                                ))}
+                            </div>
+                            {userRating > 0 && <p style={{color: 'var(--success)', marginTop: 16, fontWeight: 'bold'}}>Puanınız: {userRating}/5</p>}
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT: Sidebar */}
+                <div className="job-sidebar">
+                    {/* Apply Actions */}
+                    <div className="job-actions-panel">
+                        {/* YAPAY ZEKA EŞLEŞME SKORU GÖSTERGESİ */}
+                        {currentUser && userProfile?.type === "student" && jobSkills.length > 0 && (
+                            <div className="match-score-card" style={{
+                                background: 'rgba(0,0,0,0.3)', padding: 16, borderRadius: 'var(--radius-lg)', 
+                                border: `1px solid ${getMatchColor(matchPercentage)}`, marginBottom: 24, textAlign: 'center',
+                                boxShadow: `0 0 20px ${getMatchColor(matchPercentage)}20`
+                            }}>
+                                <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8}}>
+                                    Yapay Zeka Eşleşme Skoru
+                                </div>
+                                <div style={{ fontSize: 36, fontWeight: 900, color: getMatchColor(matchPercentage), lineHeight: 1}}>
+                                    %{matchPercentage}
+                                </div>
+                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8}}>
+                                    {matchPercentage >= 80 ? 'Bu staj pozisyonu için mükemmel bir adaysın! 🚀' : 
+                                     matchPercentage >= 50 ? 'Gereksinimlerin bir kısmını karşılıyorsun. 👍' :
+                                     'Bu pozisyon için yeni beceriler öğrenmen gerekebilir. 🎯'}
+                                </div>
+                            </div>
+                        )}
+
+                        {isAdmin && (
+                            <button className="action-btn-glow" style={{background: 'var(--danger)', color: 'white', marginBottom: 24}} onClick={handleDeleteJob} disabled={deleting}>
+                                <Trash2 size={20}/> {deleting ? "Siliniyor..." : "İlanı Sistemden Sil"}
+                            </button>
+                        )}
+
+                        {currentUser && userProfile?.type === "student" && (
+                            <>
+                                {applied ? (
+                                    <div className="action-btn-glow" style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', cursor: 'default', border: '1px solid var(--success)'}}>✅ Başvuru Yapıldı</div>
+                                ) : (
+                                    <button className="action-btn-glow action-btn-apply" onClick={() => setShowApplyModal(true)} disabled={!isProfileComplete}>
+                                        <Send size={20}/> Hemen Başvur
+                                    </button>
+                                )}
+                                <button className="action-btn-glow action-btn-secondary" onClick={handleStartChat} disabled={!isProfileComplete}>
+                                    <MessageCircle size={20}/> Mesaj Gönder
+                                </button>
+                                {!isProfileComplete && <p style={{color: '#fca5a5', fontSize: 13, marginTop: 12, textAlign: 'center'}}>Profil bilgilerinizi tamamlamanız gerekiyor.</p>}
+                            </>
+                        )}
+
+                        {!currentUser && (
+                            <Link to="/login" className="action-btn-glow action-btn-apply" style={{textAlign: 'center', display: 'block'}}>Giriş Yap & Başvur</Link>
+                        )}
+                        
+                        {safeDeadline && (
+                            <div className="deadline-alert"><AlertCircle size={14} style={{display: 'inline', verticalAlign: 'middle', marginRight: 4}}/> Son Başvuru: {safeDeadline}</div>
                         )}
                     </div>
-                    <div className="job-detail-info">
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <h1 className="job-detail-title">{job.title}</h1>
-                            {isAdmin && (
-                                <button className="btn btn-danger btn-sm" onClick={handleDeleteJob} disabled={deleting}>
-                                    {deleting ? "Siliniyor..." : "🗑️ İlanı Sil"}
-                                </button>
-                            )}
-                        </div>
-                        <p className="job-detail-company" style={{ marginBottom: "4px" }}>{job.companyName}</p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                            <span style={{ color: "#fbbf24", fontSize: "15px", fontWeight: "bold" }}>⭐ {companyAvgRating > 0 ? companyAvgRating : "Yeni"}</span>
-                            <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>({companyReviewCount} Değerlendirme)</span>
-                        </div>
-                        <div className="job-detail-badges">
-                            <span className={`badge badge-${typeColors[job.type] || "muted"}`}>
-                                {TYPE_LABELS[job.type] || job.type}
-                            </span>
-                            {job.sector && <span className="badge badge-primary">{job.sector}</span>}
-                            {job.experienceLevel && <span className="badge badge-info">{job.experienceLevel}</span>}
-                            {job.location && <span className="badge badge-muted">📍 {job.location}</span>}
-                        </div>
-                        {/* Info Sections */}
-                        <div className="job-info-sections">
-                            {/* Temel Bilgiler */}
-                            <div className="info-group">
-                                <h3 className="info-group-title">
-                                    <FileText size={16} /> Temel Bilgiler
-                                </h3>
-                                <div className="job-meta-grid">
-                                    {job.position && (
-                                        <div className="meta-item">
-                                            <Briefcase size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Pozisyon</span>
-                                                <span className="meta-value">{job.position}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.department && (
-                                        <div className="meta-item">
-                                            <ShieldCheck size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Birim</span>
-                                                <span className="meta-value">{job.department}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.openings && (
-                                        <div className="meta-item">
-                                            <Users size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Kontenjan</span>
-                                                <span className="meta-value">{job.openings} Kişi</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.startDate && (
-                                        <div className="meta-item">
-                                            <Calendar size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Başlangıç</span>
-                                                <span className="meta-value">{job.startDate}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.duration && (
-                                        <div className="meta-item">
-                                            <Clock size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Süre</span>
-                                                <span className="meta-value">{job.duration}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.salary && (
-                                        <div className="meta-item">
-                                            <Banknote size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Maaş</span>
-                                                <span className="meta-value" style={{ color: 'var(--success-light)' }}>{job.salary}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+
+                    {/* Quick Facts */}
+                    <div className="job-glass-panel" style={{padding: '32px'}}>
+                        <h3 style={{color: 'white', fontWeight: 800, fontSize: 18, marginBottom: 24}}>Özet Bilgiler</h3>
+                        <div className="job-facts-grid">
+                            <div className="job-fact-item primary">
+                                <div className="fact-icon"><Briefcase size={24}/></div>
+                                <div className="fact-info"><div className="fact-label">Çalışma Tipi</div><div className="fact-value">{TYPE_LABELS[job.type] || job.type}</div></div>
                             </div>
-
-                            {/* Aday Kriterleri */}
-                            <div className="info-group">
-                                <h3 className="info-group-title">
-                                    <Target size={16} /> Aday Kriterleri
-                                </h3>
-                                <div className="job-meta-grid">
-                                    {job.minEducation && (
-                                        <div className="meta-item">
-                                            <GraduationCap size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Eğitim</span>
-                                                <span className="meta-value">{job.minEducation}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.experienceLevel && (
-                                        <div className="meta-item">
-                                            <Gauge size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Tecrübe</span>
-                                                <span className="meta-value">{job.experienceLevel}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.language && (
-                                        <div className="meta-item">
-                                            <Languages size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Dil</span>
-                                                <span className="meta-value">{job.language}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.gender && (
-                                        <div className="meta-item">
-                                            <UserCircle2 size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Cinsiyet</span>
-                                                <span className="meta-value">{job.gender}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.ageRange && (
-                                        <div className="meta-item">
-                                            <User size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Yaş Aralığı</span>
-                                                <span className="meta-value">{job.ageRange}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.militaryStatus && (
-                                        <div className="meta-item">
-                                            <Flag size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Askerlik</span>
-                                                <span className="meta-value">{job.militaryStatus ? "Tecilli / Yapıldı" : "Farketmez"}</span>
-                                            </div>
-                                        </div>
-                                    )}
+                            {job.location && (
+                                <div className="job-fact-item">
+                                    <div className="fact-icon"><MapPin size={24}/></div>
+                                    <div className="fact-info"><div className="fact-label">Lokasyon</div><div className="fact-value">{job.location}</div></div>
                                 </div>
-                            </div>
-
-                            {/* Diğer Kriterler */}
-                            <div className="info-group">
-                                <h3 className="info-group-title">
-                                    <ClipboardList size={16} /> Diğer Kriterler
-                                </h3>
-                                <div className="job-meta-grid">
-                                    {job.driverLicense && (
-                                        <div className="meta-item">
-                                            <Smartphone size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Ehliyet</span>
-                                                <span className="meta-value">{job.driverLicense}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.travelRequirement && (
-                                        <div className="meta-item">
-                                            <Plane size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Seyahat</span>
-                                                <span className="meta-value">{job.travelRequirement}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {job.disabilityFriendly && (
-                                        <div className="meta-item">
-                                            <Accessibility size={18} className="meta-icon" />
-                                            <div className="meta-content">
-                                                <span className="meta-label">Özel Durum</span>
-                                                <span className="meta-value" style={{ color: 'var(--primary-light)' }}>Engelliye Uygun</span>
-                                            </div>
-                                        </div>
-                                    )}
+                            )}
+                            {job.sector && (
+                                <div className="job-fact-item warning">
+                                    <div className="fact-icon"><Star size={24}/></div>
+                                    <div className="fact-info"><div className="fact-label">Sektör</div><div className="fact-value">{job.sector}</div></div>
                                 </div>
-                            </div>
-
-                            {/* Başvuru Şartları */}
-                            {(job.cvRequired || job.portfolioRequired) && (
-                                <div className="info-group">
-                                    <h3 className="info-group-title">
-                                        <Rocket size={16} /> Başvuru Şartları
-                                    </h3>
-                                    <div className="application-requirements">
-                                        {job.cvRequired && (
-                                            <div className="req-pill">
-                                                <FileText size={14} /> Özgeçmiş (CV) Zorunlu
-                                            </div>
-                                        )}
-                                        {job.portfolioRequired && (
-                                            <div className="req-pill">
-                                                <MousePointer2 size={14} /> Portfolyo / Repo Zorunlu
-                                            </div>
-                                        )}
-                                    </div>
+                            )}
+                            {job.salary && (
+                                <div className="job-fact-item success">
+                                    <div className="fact-icon"><DollarSign size={24}/></div>
+                                    <div className="fact-info"><div className="fact-label">Maaş</div><div className="fact-value">{job.salary}</div></div>
+                                </div>
+                            )}
+                            {job.duration && (
+                                <div className="job-fact-item">
+                                    <div className="fact-icon"><Clock size={24}/></div>
+                                    <div className="fact-info"><div className="fact-label">Staj Süresi</div><div className="fact-value">{job.duration} Ay</div></div>
                                 </div>
                             )}
                         </div>
-                    </div>
-
-                    {/* Apply Button */}
-                    {currentUser && userProfile?.type === "student" && (
-                        <div className="job-detail-action">
-                            {applied ? (
-                                <span className="badge badge-success" style={{ fontSize: 14, padding: "10px 18px" }}>
-                                    ✅ Başvuruldu
-                                </span>
-                            ) : (
-                                <button
-                                    className="btn btn-primary btn-lg"
-                                    onClick={() => setShowApplyModal(true)}
-                                    disabled={!isProfileComplete} // Disable if profile is not complete
-                                >
-                                    📨 Başvur
-                                </button>
-                            )}
-                            <button
-                                className="btn btn-secondary btn-lg"
-                                style={{ marginTop: 12, width: "100%" }}
-                                onClick={handleStartChat}
-                                disabled={!isProfileComplete} // Disable if profile is not complete
-                            >
-                                💬 Şirkete Mesaj Yaz
-                            </button>
-                            {job.deadline && (
-                                <p className="deadline-text">
-                                    Son: {(() => {
-                                        let d;
-                                        if (job.deadline?.toDate) d = job.deadline.toDate();
-                                        else d = new Date(job.deadline);
-                                        
-                                        return !isNaN(d.getTime()) ? d.toLocaleDateString("tr-TR") : "—";
-                                    })()}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    {!currentUser && (
-                        <Link to="/login" className="btn btn-primary btn-lg">
-                            Giriş Yap & Başvur
-                        </Link>
-                    )}
-                </div>
-
-                {/* Description */}
-                <div className="card mt-24">
-                    <h2 className="section-title">📋 İlan Açıklaması</h2>
-                    <div className="job-description">
-                        {(job.description || "Açıklama birleşik bilgi içeriyor.").split("\n").map((line, i) => (
-                            <p key={i}>{line}</p>
-                        ))}
                     </div>
                 </div>
-
-                {/* Skills */}
-                {(job.skills || []).length > 0 && (
-                    <div className="card mt-24">
-                        <h2 className="section-title">🛠️ Aranan Beceriler</h2>
-                        <div className="job-skills-list">
-                            {job.skills.map((s) => (
-                                <span key={s} className="skill-tag">{s}</span>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Requirements */}
-                {job.requirements && (
-                    <div className="card mt-24">
-                        <h2 className="section-title">⚖️ Aday Gereksinimleri</h2>
-                        <div className="job-description">
-                            {job.requirements.split("\n").map((line, i) => (
-                                <p key={i}>{line}</p>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Benefits */}
-                {job.benefits && (
-                    <div className="card mt-24">
-                        <h2 className="section-title">🎁 Sosyal İmkanlar ve Yan Haklar</h2>
-                        <div className="job-description">
-                            {job.benefits.split("\n").map((line, i) => (
-                                <p key={i}>{line}</p>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Rating Section for Students */}
-                {currentUser && userProfile?.type === "student" && (
-                    <div className="card mt-24">
-                        <h2 className="section-title text-center">⭐ Şirketi Değerlendir</h2>
-                        <p className="text-muted text-center" style={{ marginBottom: 16 }}>Bu şirket hakkında ne düşünüyorsunuz? Puan verin:</p>
-                        <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
-                            {[1, 2, 3, 4, 5].map((star) => (
-                                <span 
-                                    key={star}
-                                    onClick={() => handleRating(star)}
-                                    onMouseEnter={() => setHoverRating(star)}
-                                    onMouseLeave={() => setHoverRating(0)}
-                                    style={{ 
-                                        cursor: submittingRating ? 'wait' : 'pointer', 
-                                        fontSize: 32, 
-                                        color: star <= (hoverRating || userRating) ? '#fbbf24' : '#475569', 
-                                        transition: 'color 0.2s',
-                                        userSelect: 'none'
-                                    }}
-                                >
-                                    ★
-                                </span>
-                            ))}
-                        </div>
-                        {userRating > 0 && <p className="text-success text-center mt-8">Verdiğiniz Puan: {userRating}/5</p>}
-                    </div>
-                )}
-
-                {/* Apply Modal */}
-                {showApplyModal && (
-                    <div className="modal-overlay" onClick={() => setShowApplyModal(false)}>
-                        <div className="modal-card card" onClick={(e) => e.stopPropagation()}>
-                            <h2 className="modal-title">📨 Başvur: {job.title}</h2>
-                            <p className="modal-subtitle">{job.companyName}</p>
-
-                            <div className="form-group" style={{ marginTop: 16 }}>
-                                <label className="form-label">Ön Yazı (İsteğe Bağlı)</label>
-                                <textarea
-                                    className="form-textarea"
-                                    placeholder="Kendinizi tanıtın, neden bu pozisyon için uygun olduğunuzu belirtin..."
-                                    value={coverLetter}
-                                    onChange={(e) => setCoverLetter(e.target.value)}
-                                    rows={4}
-                                />
-                            </div>
-
-                            <div className="form-row mt-16">
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        Özgeçmiş (CV) {job.cvRequired && <span style={{ color: 'var(--danger)' }}>* Zorunlu</span>}
-                                    </label>
-                                    <input
-                                        type="file"
-                                        className="form-input"
-                                        accept=".pdf"
-                                        onChange={(e) => setCvFile(e.target.files[0])}
-                                    />
-                                    <p className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>Sadece PDF formatı desteklenir.</p>
-                                </div>
-                            </div>
-
-                            {job.portfolioRequired && (
-                                <div className="form-group mt-16">
-                                    <label className="form-label">Portfolyo / LinkedIn / Repo Linki <span style={{ color: 'var(--danger)' }}>* Zorunlu</span></label>
-                                    <input
-                                        className="form-input"
-                                        placeholder="https://..."
-                                        value={portfolioUrl}
-                                        onChange={(e) => setPortfolioUrl(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                            )}
-
-                            <div className="modal-actions">
-                                <button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>İptal</button>
-                                <button className="btn btn-primary" onClick={handleApply} disabled={applying}>
-                                    {applying ? "Gönderiliyor..." : "Başvuruyu Gönder"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {/* Apply Modal */}
+            {showApplyModal && (
+                <div className="modal-overlay" onClick={() => setShowApplyModal(false)}>
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                        <h2 className="modal-title">Başvuru: <span style={{color: 'var(--primary)'}}>{job.title}</span></h2>
+                        <p className="modal-subtitle">{job.companyName}</p>
+                        <div className="form-group" style={{ marginTop: 24 }}>
+                            <label className="form-label" style={{color: 'white', marginBottom: 12}}>Ön Yazı (İsteğe Bağlı)</label>
+                            <textarea
+                                className="form-input"
+                                style={{background: 'rgba(0,0,0,0.5)', minHeight: 120, padding: 16}}
+                                placeholder="Kendinizi tanıtın, neden bu pozisyon için uygun olduğunuzu belirtin..."
+                                value={coverLetter}
+                                onChange={(e) => setCoverLetter(e.target.value)}
+                            />
+                        </div>
+                        <div className="modal-actions">
+                            <button className="btn btn-secondary" onClick={() => setShowApplyModal(false)}>İptal</button>
+                            <button className="btn btn-primary" onClick={handleApply} disabled={applying}>
+                                {applying ? "Gönderiliyor..." : "Başvuruyu Gönder"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
-import { Send, Clock, CheckCircle2, XCircle, Search, Star, Edit3, Briefcase, Inbox, Globe, MapPin, Eye, Sparkles, ClipboardCheck } from "lucide-react";
+import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { Send, Clock, CheckCircle2, XCircle, Search, Star, Edit3, Sparkles, LayoutGrid, MapPin, Globe } from "lucide-react";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
-import "./Dashboard.css";
+import { sortByDateDesc } from "../../utils/helpers";
+import "./Dashboard.css"; // now using Bento Box CSS
 
 export default function StudentDashboard() {
     const { currentUser, userProfile } = useAuth();
@@ -12,7 +13,6 @@ export default function StudentDashboard() {
     const [recommendedJobs, setRecommendedJobs] = useState([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, accepted: 0, rejected: 0 });
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -21,246 +21,232 @@ export default function StudentDashboard() {
         let unsubscribeJobs = () => { };
 
         try {
-            // Real-time başvuru dinleyicisi
-            const appsQ = query(
-                collection(db, "applications"),
-                where("studentId", "==", currentUser.uid),
-                limit(50)
-            );
-
+            const appsQ = query(collection(db, "applications"), where("studentId", "==", currentUser.uid), limit(50));
             unsubscribeApps = onSnapshot(appsQ, (snap) => {
-                try {
-                    const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                    // Safe memory sort
-                    apps.sort((a, b) => {
-                        const getMs = (val) => {
-                            if (!val) return 0;
-                            if (val.toMillis) return val.toMillis();
-                            const d = new Date(val).getTime();
-                            return isNaN(d) ? 0 : d;
-                        };
-                        return getMs(b.createdAt) - getMs(a.createdAt);
-                    });
-
-                    const recentApps = apps.slice(0, 5);
-                    setApplications(recentApps);
-                    setStats({
-                        total: apps.length,
-                        pending: apps.filter(a => a.status === "pending").length,
-                        accepted: apps.filter(a => a.status === "accepted").length,
-                        rejected: apps.filter(a => a.status === "rejected").length,
-                    });
-                    setLoading(false);
-                } catch (err) {
-                    console.error("Dashboard Apps processing error:", err);
-                    setLoading(false);
-                }
-            }, (err) => {
-                console.error("Dashboard Apps Fetch error:", err);
+                const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                apps.sort(sortByDateDesc);
+                setApplications(apps.slice(0, 5));
+                setStats({
+                    total: apps.length,
+                    pending: apps.filter(a => a.status === "pending").length,
+                    accepted: apps.filter(a => a.status === "accepted").length,
+                    rejected: apps.filter(a => a.status === "rejected").length,
+                });
                 setLoading(false);
             });
 
-            // Real-time önerilen ilanlar
-            const jobsQ = query(
-                collection(db, "jobs"),
-                where("status", "==", "active"),
-                limit(20)
-            );
-
+            const jobsQ = query(collection(db, "jobs"), where("status", "==", "active"), limit(20));
             unsubscribeJobs = onSnapshot(jobsQ, (snap) => {
-                try {
-                    const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                    // Safe memory sort
-                    jobs.sort((a, b) => {
-                        const getMs = (val) => {
-                            if (!val) return 0;
-                            if (val.toMillis) return val.toMillis();
-                            const d = new Date(val).getTime();
-                            return isNaN(d) ? 0 : d;
-                        };
-                        return getMs(b.createdAt) - getMs(a.createdAt);
-                    });
-
-                    setRecommendedJobs(jobs.slice(0, 4));
-                } catch (err) {
-                    console.error("Dashboard Jobs processing error:", err);
-                }
-            }, (err) => {
-                console.error("Dashboard Jobs Fetch error:", err);
-                setRecommendedJobs(DEMO_REC_JOBS);
+                const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                jobs.sort(sortByDateDesc);
+                setRecommendedJobs(jobs.slice(0, 5));
             });
         } catch (err) {
-            console.error("Dashboard Init error:", err);
-            setLoading(false);
+            console.error(err); setLoading(false);
         }
 
-        return () => {
-            unsubscribeApps();
-            unsubscribeJobs();
-        };
+        return () => { unsubscribeApps(); unsubscribeJobs(); };
     }, [currentUser]);
 
-    const statusInfo = {
-        "pending": { label: "Beklemede", color: "warning", icon: <Clock size={14} /> },
-        "reviewing": { label: "İncelenen", color: "info", icon: <Eye size={14} /> },
-        "accepted": { label: "Kabul", color: "success", icon: <CheckCircle2 size={14} /> },
-        "rejected": { label: "Reddedilen", color: "danger", icon: <XCircle size={14} /> },
+    const statusMap = {
+        "pending": { color: "warning", icon: <Clock /> },
+        "reviewing": { color: "primary", icon: <Star /> },
+        "accepted": { color: "success", icon: <CheckCircle2 /> },
+        "rejected": { color: "danger", icon: <XCircle /> },
     };
 
+    // --- MEGA FEATURE: PROFIL TAMAMLAMA (Profile Completeness Engine) ---
+    const calculateProfileCompletion = () => {
+        let score = 0;
+        if (currentUser?.displayName) score += 15;
+        if (userProfile?.photoUrl) score += 15;
+        if (userProfile?.department) score += 15;
+        if (userProfile?.university) score += 15;
+        if (userProfile?.gpa) score += 10;
+        if (userProfile?.bio) score += 15;
+        if (userProfile?.skills && userProfile.skills.length > 0) score += 15;
+        return score > 100 ? 100 : score;
+    };
+    const completionScore = calculateProfileCompletion();
+
     if (loading) return (
-        <div className="page-wrapper">
-            <div className="content-wrapper">
-                <div className="dashboard-welcome">
-                    <h1 className="dashboard-title">⌛ Yükleniyor...</h1>
-                </div>
-                <div className="stats-grid">
-                    {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 16 }} />)}
-                </div>
-                <div className="dashboard-grid mt-24">
-                    <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
-                    <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
-                </div>
-            </div>
+        <div className="page-wrapper page-enter">
+            <h1 style={{color: 'white', padding: 40}}>Bento Yükleniyor...</h1>
         </div>
     );
 
     return (
-        <div className="page-wrapper">
-            <div className="content-wrapper page-enter">
-                {/* Welcome */}
-                <div className="dashboard-welcome">
-                    <div>
-                        <h1 className="dashboard-title">
-                            Merhaba, {currentUser?.displayName ? currentUser.displayName.split(" ")[0] : "Öğrenci"} <Sparkles className="sparkle-icon" size={28} color="var(--primary)" />
-                        </h1>
-                        <p className="dashboard-subtitle">Bugün nasıl gidiyor? İşte başvuru özetin:</p>
+        <div className="page-wrapper page-enter">
+            <div className="bento-container">
+                
+                {/* 1. Welcome Hero (Spans 8 cols, 2 rows) */}
+                <div className="bento-card bento-welcome">
+                    <h1>
+                        Tasarımcı,<br/>
+                        Hoşgeldin {currentUser?.displayName?.split(" ")[0]} <Sparkles color="var(--primary)" size={32}/>
+                    </h1>
+                    <p>
+                        Staj arayışında yeni bir boyuta hoşgeldin. Kariyerini şekillendirecek ilanlar ve başvuruların hepsi tek bir devasa yapıda.
+                    </p>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        <Link to="/jobs" className="btn btn-primary" style={{ padding: '16px 32px', borderRadius: 'var(--radius-full)', fontSize: 16 }}>
+                            <Search size={20} style={{ marginRight: 8 }} /> İlan Keşfet
+                        </Link>
                     </div>
-                    <Link to="/jobs" className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Search size={18} /> İlan Ara
-                    </Link>
                 </div>
 
-                {/* Stats */}
-                <div className="stats-grid">
-                    <StatCard icon={<Send size={22} />} label="Toplam Başvuru" value={stats.total} color="primary" />
-                    <StatCard icon={<Clock size={22} />} label="Beklemede" value={stats.pending} color="warning" />
-                    <StatCard icon={<CheckCircle2 size={22} />} label="Kabul" value={stats.accepted} color="success" />
-                    <StatCard icon={<XCircle size={22} />} label="Reddedildi" value={stats.rejected} color="danger" />
-                </div>
-
-                <div className="dashboard-grid">
-                    {/* Recent Applications */}
-                    <div className="card">
-                        <div className="section-header">
-                            <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <ClipboardCheck size={20} color="var(--info)" /> Son Başvurularım
-                            </h2>
-                            <Link to="/student/applications" className="see-all">Tümünü Gör →</Link>
+                {/* 2. Mini Profile Widget (Spans 4 cols, 2 rows) */}
+                <div className="bento-card bento-profile">
+                    <div className="bento-profile-inner">
+                        <div style={{display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24}}>
+                            <div className="avatar-xl" style={{marginBottom: 0, width: 80, height: 80}}>
+                                {userProfile?.photoUrl ? <img src={userProfile?.photoUrl} alt="Avatar"/> : (currentUser?.displayName?.[0] || "S")}
+                            </div>
+                            
+                            {/* PROFİL TAMAMLAMA WIDGET */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{
+                                    width: 80, height: 80, borderRadius: '50%',
+                                    background: `conic-gradient(var(--secondary) ${completionScore}%, rgba(255,255,255,0.05) 0)`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: `0 0 20px rgba(168, 85, 247, ${completionScore / 200})`
+                                }}>
+                                    <div style={{
+                                        width: 70, height: 70, borderRadius: '50%', background: 'var(--bg-card)', 
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 20, fontWeight: 900, color: 'white'
+                                    }}>
+                                        %{completionScore}
+                                    </div>
+                                </div>
+                                <span style={{fontSize: 11, color: 'var(--text-muted)', marginTop: 8, fontWeight: 700, textTransform: 'uppercase'}}>Doluluk</span>
+                            </div>
                         </div>
-                        {loading ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 8 }} />)}
-                            </div>
-                        ) : applications.length === 0 ? (
-                            <div className="empty-state">
-                                <Inbox size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-                                <p>Henüz başvurun yok</p>
-                                <Link to="/jobs" className="btn btn-primary btn-sm">İlan Ara</Link>
-                            </div>
-                        ) : (
-                            <div className="apps-list">
-                                {applications.map((app) => {
-                                    const s = statusInfo[app.status] || statusInfo.pending;
-                                    return (
-                                        <div key={app.id} className="app-item">
-                                            <div className="app-info">
-                                                <p className="app-title">{app.jobTitle}</p>
-                                                <p className="app-company">{app.companyName}</p>
-                                            </div>
-                                            <span className={`badge badge-${s.color}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                {s.icon} {s.label}
+
+                        <h3 style={{ fontSize: 24, fontWeight: 900, color: 'white', margin: 0 }}>{currentUser?.displayName}</h3>
+                        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 600, marginTop: 4, marginBottom: 24 }}>
+                            {userProfile?.department || "Bölüm Belirtilmedi"}
+                        </p>
+                        <Link to="/student/profile" className="profile-btn-glow">
+                            <Edit3 size={18} style={{marginRight: 8, verticalAlign: 'text-bottom'}}/> Profesyonel Görünüm
+                        </Link>
+                    </div>
+                </div>
+
+                {/* 3. The 4 Stats (Each spans 3 cols, 1 row) */}
+                <div className="bento-card bento-stat primary">
+                    <div>
+                        <span className="stat-large-val">{stats.total}</span>
+                        <span className="stat-large-label">Başvuru Özeti</span>
+                    </div>
+                    <div className="icon-wrapper"><Send /></div>
+                </div>
+
+                <div className="bento-card bento-stat warning">
+                    <div>
+                        <span className="stat-large-val">{stats.pending}</span>
+                        <span className="stat-large-label">Beklemede</span>
+                    </div>
+                    <div className="icon-wrapper"><Clock /></div>
+                </div>
+
+                <div className="bento-card bento-stat success">
+                    <div>
+                        <span className="stat-large-val">{stats.accepted}</span>
+                        <span className="stat-large-label">Kabul Edilen</span>
+                    </div>
+                    <div className="icon-wrapper"><CheckCircle2 /></div>
+                </div>
+
+                <div className="bento-card bento-stat danger">
+                    <div>
+                        <span className="stat-large-val">{stats.rejected}</span>
+                        <span className="stat-large-label">Reddedilen</span>
+                    </div>
+                    <div className="icon-wrapper"><XCircle /></div>
+                </div>
+
+                {/* 4. Applications Board (Spans 6 cols, 3 rows) */}
+                <div className="bento-card bento-tall amber">
+                    <div className="bento-title">
+                        <span><LayoutGrid size={24} style={{marginRight: 10, verticalAlign: 'text-bottom', color: 'var(--primary)'}} /> Aksiyon Bekleyenler</span>
+                        <Link to="/student/applications" className="bento-title-link">Tümü</Link>
+                    </div>
+                    {applications.length === 0 ? (
+                        <div className="bento-empty">
+                            <Send />
+                            <p>Tüm radar temiz. Yeni bir maceraya atıl.</p>
+                        </div>
+                    ) : (
+                        <div className="bento-list">
+                            {applications.map(app => {
+                                const s = statusMap[app.status] || statusMap.pending;
+                                return (
+                                    <div key={app.id} className="bento-list-item">
+                                        <div className="item-avatar" style={{background: `rgba(var(--${s.color}-rgb), 0.15)`, color: `var(--${s.color})`}}>
+                                            {s.icon}
+                                        </div>
+                                        <div className="item-info">
+                                            <div className="item-title">{app.jobTitle}</div>
+                                            <div className="item-meta">{app.companyName}</div>
+                                        </div>
+                                        <span className={`badge badge-${s.color}`}>{app.status.toUpperCase()}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* 5. Recommended Jobs Feed (Spans 6 cols, 3 rows) */}
+                <div className="bento-card bento-wide">
+                    <div className="bento-title">
+                        <span><Star size={24} style={{marginRight: 10, verticalAlign: 'text-bottom', color: 'var(--warning)'}} /> Sizin İçin Vitrin Yıldızları</span>
+                        <Link to="/jobs" className="bento-title-link" style={{background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'}}>Vitrin</Link>
+                    </div>
+                    {recommendedJobs.length === 0 ? (
+                        <div className="bento-empty">
+                            <Search />
+                            <p>Şu an sana uygun yıldız bulamadık.</p>
+                        </div>
+                    ) : (
+                        <div className="bento-list">
+                            {recommendedJobs.map(job => {
+                                const matchPercentage = (() => {
+                                    if (!job.skills || job.skills.length === 0) return 0;
+                                    const sSkills = (userProfile?.skills || []).map(s => s.toLowerCase().trim());
+                                    const jSkills = job.skills.map(s => s.toLowerCase().trim());
+                                    const matchCount = jSkills.filter(js => sSkills.includes(js)).length;
+                                    return Math.round((matchCount / jSkills.length) * 100);
+                                })();
+
+                                return (
+                                <Link to={`/jobs/${job.id}`} key={job.id} className="bento-list-item">
+                                    <div className="item-avatar">{job.companyName?.charAt(0)}</div>
+                                    <div className="item-info">
+                                        <div className="item-title">{job.title}</div>
+                                        <div className="item-meta">
+                                            {job.type === "remote" ? <Globe size={14} /> : <MapPin size={14} />} 
+                                            {job.companyName} • {job.location || "Lokasyon Yok"}
+                                        </div>
+                                        <div style={{marginTop: 8}}>
+                                            <span style={{
+                                                fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 4,
+                                                background: matchPercentage >= 75 ? 'rgba(34, 197, 94, 0.15)' : matchPercentage >= 40 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(100, 116, 139, 0.15)',
+                                                color: matchPercentage >= 75 ? '#4ade80' : matchPercentage >= 40 ? '#fbbf24' : 'var(--text-muted)'
+                                            }}>
+                                                ⚡ {matchPercentage > 0 ? `%${matchPercentage} Otonom Uyum` : 'Analiz Ediliyor'}
                                             </span>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Recommended Jobs */}
-                    <div className="card">
-                        <div className="section-header">
-                            <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <Star size={20} color="var(--warning)" /> Önerilen İlanlar
-                            </h2>
-                            <Link to="/jobs" className="see-all">Tümünü Gör →</Link>
-                        </div>
-                        <div className="rec-jobs-list">
-                            {recommendedJobs.map((job) => (
-                                <Link to={`/jobs/${job.id}`} key={job.id} className="rec-job-item">
-                                    <div className="avatar avatar-sm rec-job-logo">
-                                        {job.companyLogo ? (
-                                            <img src={job.companyLogo} alt={job.companyName} />
-                                        ) : (
-                                            job.companyName?.charAt(0)
-                                        )}
                                     </div>
-                                    <div className="rec-job-info">
-                                        <p className="rec-job-title">{job.title}</p>
-                                        <p className="rec-job-meta">
-                                            {job.companyName} · {job.location}
-                                            {job.sector && <span className="rec-job-badge">🏷️ {job.sector}</span>}
-                                            {job.experienceLevel && <span className="rec-job-badge">⚡ {job.experienceLevel}</span>}
-                                        </p>
-                                    </div>
-                                    <span className="rec-job-type">
-                                        {job.type === "remote" ? <Globe size={16} /> : <MapPin size={16} />}
-                                    </span>
                                 </Link>
-                            ))}
+                                );
+                            })}
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Profile Completion / Admin Panel */}
-                <div className="card profile-card">
-                    <div className="profile-card-info" style={{ display: "flex", gap: 16 }}>
-                        <div className="icon-box-secondary">
-                            <Edit3 size={24} color="var(--primary)" />
-                        </div>
-                        <div>
-                            <h3>Profilini Tamamla</h3>
-                            <p>Şirketlerin seni bulmasını kolaylaştır. CV yükle, becerilerini ve üniversiteni ekle.</p>
-                        </div>
-                    </div>
-                    <Link to="/student/profile" className="btn btn-secondary">Profile Git →</Link>
-                </div>
             </div>
         </div>
     );
 }
-
-function StatCard({ icon, label, value, color }) {
-    return (
-        <div className={`stat-card stat-card-${color}`}>
-            <span className="stat-icon">{icon}</span>
-            <div>
-                <p className="stat-value">{value}</p>
-                <p className="stat-label">{label}</p>
-            </div>
-        </div>
-    );
-}
-
-const DEMO_APPS = [
-    { id: "1", jobTitle: "Frontend Geliştirici Stajyeri", companyName: "TechCorp", status: "accepted" },
-    { id: "2", jobTitle: "UI/UX Tasarım Stajyeri", companyName: "DesignHub", status: "pending" },
-    { id: "3", jobTitle: "Pazarlama Stajyeri", companyName: "MarketPro", status: "rejected" },
-];
-const DEMO_REC_JOBS = [
-    { id: "1", title: "Frontend Geliştirici Stajyeri", companyName: "TechCorp", location: "İstanbul", type: "remote" },
-    { id: "2", title: "UI/UX Tasarım Stajyeri", companyName: "DesignHub", location: "Ankara", type: "hybrid" },
-    { id: "4", title: "Backend Developer Stajyeri", companyName: "DataSoft", location: "Uzaktan", type: "remote" },
-];

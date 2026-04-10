@@ -107,7 +107,10 @@ export default function Notifications() {
                                 <div className="notif-content">
                                     <p className="notif-message">{notif.message}</p>
                                     <span className="notif-time">
-                                        {notif.createdAt?.toDate()?.toLocaleDateString("tr-TR")} {notif.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {(() => {
+                                            const d = notif.createdAt?.toMillis ? new Date(notif.createdAt.toMillis()) : (notif.createdAt ? new Date(notif.createdAt) : new Date());
+                                            return !isNaN(d) ? `${d.toLocaleDateString("tr-TR")} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "";
+                                        })()}
                                     </span>
                                 </div>
                                 <div className="notif-actions">

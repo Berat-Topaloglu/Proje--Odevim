@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { Text, Surface, IconButton, Avatar, ActivityIndicator, Divider } from "react-native-paper";
-import { useAuth } from "../src/context/AuthContext";
+import { useAuth } from "../../src/context/AuthContext";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../src/firebase/config";
+import { db } from "../../src/firebase/config";
 import { useRouter } from "expo-router";
 
 export default function NotificationsScreen() {
@@ -17,20 +17,12 @@ export default function NotificationsScreen() {
 
         const q = query(
             collection(db, `notifications/${currentUser.uid}/items`),
-            // orderBy removed to avoid index requirement
+            orderBy("createdAt", "desc")
         );
 
         const unsubscribe = onSnapshot(q, (snap) => {
-            let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
-            // Memory sort: createdAt desc
-            items.sort((a, b) => {
-                const dateA = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt).getTime()) : 0;
-                const dateB = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime()) : 0;
-                return dateB - dateA;
-            });
-
-            setNotifications(items);
+            const notifData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setNotifications(notifData);
             setLoading(false);
         });
 
@@ -51,7 +43,7 @@ export default function NotificationsScreen() {
 
     const getIcon = (type) => {
         switch (type) {
-            case "application": return "email-outline";
+            case "application": return "email-send";
             case "message": return "chat";
             case "review": return "star";
             default: return "bell";

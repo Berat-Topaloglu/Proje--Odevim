@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Alert, Image, TouchableOpacity } from "re
 import { Text, TextInput, Button, Surface, IconButton, ActivityIndicator, Avatar } from "react-native-paper";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { updateProfile } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
@@ -36,30 +37,14 @@ export default function CompanyProfileEdit() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Clean profile to remove undefined values
-            const cleanProfile = Object.entries(profile).reduce((acc, [key, value]) => {
-                if (value !== undefined) acc[key] = value;
-                return acc;
-            }, {});
-
-            const updateData = {
-                ...cleanProfile,
-                companyName: cleanProfile.companyName || currentUser.displayName,
-                updatedAt: new Date().toISOString()
-            };
-
-            await updateDoc(doc(db, "companies", currentUser.uid), updateData);
+            await updateDoc(doc(db, "companies", currentUser.uid), profile);
             
             // Sync companyName with user document displayName
-            await updateDoc(doc(db, "users", currentUser.uid), { 
-                displayName: updateData.companyName,
-                updatedAt: new Date().toISOString()
-            });
+            await updateDoc(doc(db, "users", currentUser.uid), { displayName: profile.companyName });
             
             // Sync with Firebase Auth currentUser
-            if (updateData.companyName !== currentUser.displayName) {
-                const { updateProfile } = require("firebase/auth");
-                await updateProfile(currentUser, { displayName: updateData.companyName });
+            if (profile.companyName !== currentUser.displayName) {
+                await updateProfile(currentUser, { displayName: profile.companyName });
             }
 
             Alert.alert("Başarılı", "Şirket profili güncellendi.");
@@ -74,6 +59,12 @@ export default function CompanyProfileEdit() {
 
     const handleLogoUpload = async () => {
         try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (permission.status !== "granted") {
+                Alert.alert("İzin Gerekli", "Logo yüklemek için galeri erişim izni gerekiyor.");
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,

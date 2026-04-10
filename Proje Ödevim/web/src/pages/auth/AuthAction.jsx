@@ -77,9 +77,8 @@ export default function AuthAction() {
         try {
             await confirmPasswordReset(auth, oobCode, password);
             setSuccess(true);
-            setOobCode(""); // Cyber-Purge: Destroy the code once it is used
         } catch (err) {
-            setError("Şifre güncellenirken bir hata oluştu veya bu link zaten kullanılmış.");
+            setError("Şifre güncellenirken bir hata oluştu. Lütfen tekrar deneyin.");
         } finally {
             setLoading(false);
         }
